@@ -1,0 +1,8 @@
+black
+flake8
+pylint
+mypy
+python-dotenv
+pandas
+scikit-learn
+nltk
