@@ -8,6 +8,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.utils import shuffle
 
 nltk.download('stopwords') # comment out after first run
 nltk.download('punkt_tab') # comment out after first run
@@ -15,12 +16,16 @@ nltk.download('punkt_tab') # comment out after first run
 stop_words = set(stopwords.words('english'))
 
 
-def run_LogReg(X, y):
+def LogReg(X: np.array, y: np.array, with_bigrams=False):
+    if with_bigrams:
+        return
+    
     model = LogisticRegression(random_state=0)
     classifier = model.fit(X,y)
     preds = classifier.predict(X)
     probs = classifier.predict_proba(X)
     logits = classifier.predict_log_proba(X)
+    raise ValueError
 
 
 def parse_to_pandas(data_dir: str):
@@ -61,6 +66,7 @@ def remove_stopwords(text: str):
     
     
 def main():
+    # the code assumes the txt files are inside a folder named 'op_spam_v1.4' in the project folder
     # 1. preparation
     # df = parse_to_pandas('op_spam_v1.4')
     # df.to_csv('dataset_df.csv')
@@ -73,21 +79,30 @@ def main():
     df['text_processed'] = df['text'].map(lambda text: remove_puncuation(text))
     df['text_processed'] = df['text_processed'].map(lambda text: text.lower())
     df['text_processed_tokens'] = df['text_processed'].map(lambda text: remove_stopwords(text))
+    # shuffle
+    df = shuffle(df, random_state=42)
     
     # 2.5 text vectorization
+    train_indexes = df[df['fold'] != 'fold5']['index'].tolist()
+    test_indexes = df[df['fold'] == 'fold5']['index'].tolist()
+    # remove words that appear in less thn 5% of the dataset
     vect = CountVectorizer(min_df=.05)
     vects = vect.fit_transform(df.text_processed_tokens)
     td = pd.DataFrame(vects.todense())
     td.columns = vect.get_feature_names_out()
     td['doc'] = df['txt_path'].map(lambda p: p.split('/')[-1])
+    # convert to matrix
     dtm = td.to_numpy()[:, :-1]
     
     # 3. labeling 0: deceptive, 1: truthful
-    df['label'] = df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1))
-    X, y = dtm, np.array(df['label'].tolist())
-    run_LogReg(X, y)
+    labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
     
+    # 4. split 
+    X_train, X_test = dtm[train_indexes, :], dtm[test_indexes, :]
+    y_train, y_test = labels[train_indexes], labels[test_indexes]
     
+    # Run Model
+    LogReg(X_train, y_train)
     
     
 if __name__ == '__main__':
