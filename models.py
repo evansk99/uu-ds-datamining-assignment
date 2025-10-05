@@ -20,6 +20,7 @@ def extract_lexical_features(texts):
     for text in texts:
         features = {}
         sentences = text.split('.')
+        sentence_lengths = [len(sent.split()) for sent in sentences if sent.strip()]
         words = word_tokenize(text)
         unique_words = set(words)
         features['type_token_ratio'] = len(unique_words) / len(words) if len(words) > 0 else 0
@@ -27,6 +28,9 @@ def extract_lexical_features(texts):
         features['char_count'] = len(text)
         features['word_count'] = len(words)
         features['sentence_count'] = len([s for s in sentences if s.strip()])
+        features['avg_sentence_length'] = np.mean(sentence_lengths) if sentence_lengths else 0
+        features['punctuation_ratio'] = sum(text.count(p) for p in ['.', ',', '!', '?', ';', ':']) / len(words)
+        features['std_sentence_length'] = np.std(sentence_lengths) if sentence_lengths else 0
         features_list.append(features)
     return pd.DataFrame(features_list)
 
@@ -39,13 +43,9 @@ def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
         ngram_range=(1,2) if with_bigrams else (1,1)
     )
     vectors = vectorizer.fit_transform(df.text_processed)
-    td = pd.DataFrame(vectors.todense())
-    td.columns = vectorizer.get_feature_names_out()
-    # td['num_tokens'] = df['text_processed'].map(lambda text: len(word_tokenize(text)))
-    td['doc'] = df['txt_path'].map(lambda p: p.split('/')[-1])
-    # convert to matrix
-    dtm = td.to_numpy()[:, :-1]
-    return dtm
+    dtm = vectors.toarray()
+    feature_names = vectorizer.get_feature_names_out()
+    return dtm, feature_names
 
 def LogRegCV(X_train: np.array, y_train: np.array,
            X_test: np.array, y_test: np.array,
@@ -56,6 +56,7 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     pipeline = make_pipeline(LogisticRegression(
         fit_intercept=True,
         # cv=StratifiedKFold(k_folds, shuffle=True),
+        C=(1.2),
         class_weight='balanced',
         random_state=42,
         penalty='l1',
@@ -98,8 +99,8 @@ def LogRegCV(X_train: np.array, y_train: np.array,
 
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
                 X_test: np.array, y_test: np.array, 
-                max_features, test_fold: int,
-                with_bigrams=False, k_folds=5
+                test_fold: int,with_bigrams=False,
+                max_features=150, k_folds=5
             ):
     print(X_train.shape[1])
     pipeline = make_pipeline(

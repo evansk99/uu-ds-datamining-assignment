@@ -8,6 +8,7 @@ import random
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 from models import LogRegCV, MultinomialNaiveBayes, vectorize, extract_lexical_features
 from scipy.sparse import hstack, csr_matrix
@@ -69,33 +70,31 @@ def main():
     # 2.1 filter
     df = df[df['polarity'].str.contains('negative')]
     df['text'] = df['txt_path'].map(lambda path: open(path,'r').read())
+    scaler = StandardScaler()
     lexical_df = extract_lexical_features(df.text.tolist())
-    lexical_features = lexical_df.values
+    lexical_features = scaler.fit_transform(lexical_df)
     lexical_feature_names = lexical_df.columns.tolist()
-    lexical_sparse = csr_matrix(lexical_features.astype(float))
     
     df['text_processed'] = df['text'].map(lambda text: remove_puncuation(text))
     df['text_processed'] = df['text_processed'].map(lambda text: text.lower())
     df['text_processed'] = df['text_processed'].map(lambda text: remove_nums(text))
     df['text_processed'] = df['text_processed'].map(lambda text: remove_stopwords(text))
     
-    # Test fold is fold5
-    # train_indexes = df[df['fold'] != 'fold5']['index'].tolist()
-    # test_indexes = df[df['fold'] == 'fold5']['index'].tolist()
-    
     # Test fold is random
-    test_fold = 'fold5' # random.choice(df['fold'].tolist())
+    test_fold = random.choice(df['fold'].tolist())
     train_indexes = df[df['fold'] != test_fold]['index'].tolist()
     test_indexes = df[df['fold'] == test_fold]['index'].tolist()
     
     # 2.5 text vectorization
     # remove words that appear in less thn 5% of the dataset
-    maxF = 400
-    k = 32
-    dtm_unigrams = vectorize(df, max_features=maxF)
-    dtm_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
-    dtm_unigrams = hstack([dtm_unigrams, lexical_sparse])
-    dtm_bigrams = hstack([dtm_bigrams, lexical_sparse])
+    maxF = 250
+    k = 20
+    use_lexical_features = True
+    dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
+    dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
+    if use_lexical_features:
+        dtm_unigrams = np.hstack((dtm_unigrams, lexical_features))
+        dtm_bigrams = np.hstack((dtm_bigrams, lexical_features))
     
     # 3. labeling 0: deceptive, 1: truthful
     labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
@@ -114,12 +113,12 @@ def main():
         k_folds=k, test_fold=test_fold)
     
     # Run Multinomial NB
-    MultinomialNaiveBayes(**unigrams_ds,
-                          y_train=y_train , y_test=y_test,
-                          k_folds=k, test_fold=test_fold)
-    MultinomialNaiveBayes(**bigrams_ds,
-                          y_train=y_train , y_test=y_test, 
-                          with_bigrams=True, k_folds=k, test_fold=test_fold)
+    # MultinomialNaiveBayes(**unigrams_ds,
+    #                       y_train=y_train , y_test=y_test,
+    #                       k_folds=k, test_fold=test_fold)
+    # MultinomialNaiveBayes(**bigrams_ds,
+    #                       y_train=y_train , y_test=y_test, 
+    #                       with_bigrams=True, k_folds=k, test_fold=test_fold)
     
 if __name__ == '__main__':
     main()
