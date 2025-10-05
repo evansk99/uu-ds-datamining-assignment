@@ -56,12 +56,13 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     pipeline = make_pipeline(LogisticRegression(
         fit_intercept=True,
         # cv=StratifiedKFold(k_folds, shuffle=True),
-        C=(1.2),
+        C=(2),
         class_weight='balanced',
         random_state=42,
         penalty='l1',
         solver='saga',
-        warm_start=True
+        warm_start=True,
+        max_iter=50
     ))
     # Define multiple metrics to evaluate
     scoring = ['accuracy', 'precision', 'recall', 'f1']

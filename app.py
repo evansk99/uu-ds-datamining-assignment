@@ -8,7 +8,7 @@ import random
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.utils import shuffle
 from models import LogRegCV, MultinomialNaiveBayes, vectorize, extract_lexical_features
 from scipy.sparse import hstack, csr_matrix
@@ -17,7 +17,7 @@ from scipy.sparse import hstack, csr_matrix
 nltk.download('stopwords') # comment out after first run
 nltk.download('punkt_tab') # comment out after first run
 # Get English stopwords
-stop_words = set(stopwords.words('english'))
+stop_words = {'i', 'my', 'we', 'us', 'not', 'never', 'is', 'are', 'was', 'were', 'could', 'would', 'might', 'should'}
 
 
 def parse_to_pandas(data_dir: str):
@@ -70,11 +70,16 @@ def main():
     # 2.1 filter
     df = df[df['polarity'].str.contains('negative')]
     df['text'] = df['txt_path'].map(lambda path: open(path,'r').read())
-    scaler = StandardScaler()
+    
+    # 2.2 extract lexical features and normalise them
+    logRegScaler = StandardScaler()
+    multiNBScaler = MinMaxScaler()
     lexical_df = extract_lexical_features(df.text.tolist())
-    lexical_features = scaler.fit_transform(lexical_df)
+    lexical_features_logReg = logRegScaler.fit_transform(lexical_df)
+    lexical_features_multiNB = multiNBScaler.fit_transform(lexical_df)
     lexical_feature_names = lexical_df.columns.tolist()
     
+    # text preprocessing
     df['text_processed'] = df['text'].map(lambda text: remove_puncuation(text))
     df['text_processed'] = df['text_processed'].map(lambda text: text.lower())
     df['text_processed'] = df['text_processed'].map(lambda text: remove_nums(text))
@@ -87,38 +92,42 @@ def main():
     
     # 2.5 text vectorization
     # remove words that appear in less thn 5% of the dataset
-    maxF = 250
-    k = 20
+    maxF = 400
+    k = 32
     use_lexical_features = True
     dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
     dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
     if use_lexical_features:
-        dtm_unigrams = np.hstack((dtm_unigrams, lexical_features))
-        dtm_bigrams = np.hstack((dtm_bigrams, lexical_features))
+        dtm_unigrams_logReg = np.hstack((dtm_unigrams, lexical_features_logReg))
+        dtm_bigrams_logReg = np.hstack((dtm_bigrams, lexical_features_logReg))
+        dtm_unigrams_multiNB = np.hstack((dtm_unigrams, lexical_features_multiNB))
+        dtm_bigrams_multiNB = np.hstack((dtm_bigrams, lexical_features_multiNB))
     
     # 3. labeling 0: deceptive, 1: truthful
     labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
     
     # 4. split
-    unigrams_ds = {'X_train': dtm_unigrams[train_indexes, :], 'X_test': dtm_unigrams[test_indexes, :]}
-    bigrams_ds = {'X_train': dtm_bigrams[train_indexes, :], 'X_test': dtm_bigrams[test_indexes, :]}
+    unigrams_ds_logReg = {'X_train': dtm_unigrams_logReg[train_indexes, :], 'X_test': dtm_unigrams_logReg[test_indexes, :]}
+    bigrams_ds_logReg = {'X_train': dtm_bigrams_logReg[train_indexes, :], 'X_test': dtm_bigrams_logReg[test_indexes, :]}
+    unigrams_ds_multiNB = {'X_train': dtm_unigrams_multiNB[train_indexes, :], 'X_test': dtm_unigrams_multiNB[test_indexes, :]}
+    bigrams_ds_multiNB = {'X_train': dtm_bigrams_multiNB[train_indexes, :], 'X_test': dtm_bigrams_multiNB[test_indexes, :]}
     y_train, y_test = labels[train_indexes], labels[test_indexes]
     
     # Run Logistic Regression CV
-    LogRegCV(**unigrams_ds,
-        y_train=y_train , y_test=y_test,
-        k_folds=k, test_fold=test_fold)
-    LogRegCV(**bigrams_ds,
-        y_train=y_train , y_test=y_test, with_bigrams=True,
-        k_folds=k, test_fold=test_fold)
+    LogRegCV(**unigrams_ds_logReg,
+            y_train=y_train , y_test=y_test,
+            k_folds=k, test_fold=test_fold)
+    LogRegCV(**bigrams_ds_logReg,
+            y_train=y_train , y_test=y_test, with_bigrams=True,
+            k_folds=k, test_fold=test_fold)
     
     # Run Multinomial NB
-    # MultinomialNaiveBayes(**unigrams_ds,
-    #                       y_train=y_train , y_test=y_test,
-    #                       k_folds=k, test_fold=test_fold)
-    # MultinomialNaiveBayes(**bigrams_ds,
-    #                       y_train=y_train , y_test=y_test, 
-    #                       with_bigrams=True, k_folds=k, test_fold=test_fold)
+    MultinomialNaiveBayes(**unigrams_ds_multiNB,
+                          y_train=y_train , y_test=y_test,
+                          k_folds=k, test_fold=test_fold)
+    MultinomialNaiveBayes(**bigrams_ds_multiNB,
+                          y_train=y_train , y_test=y_test, 
+                          with_bigrams=True, k_folds=k, test_fold=test_fold)
     
 if __name__ == '__main__':
     main()
