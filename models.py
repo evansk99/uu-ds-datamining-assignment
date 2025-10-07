@@ -11,15 +11,18 @@ from datetime import datetime
 from scipy import sparse
 from scipy.sparse import hstack
 
-## after collective experiment function
-from sklearn.model_selection import cross_val_score
+# My imports
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import  accuracy_score, f1_score
 import matplotlib.pyplot as plt
 from sklearn.feature_extraction.text import TfidfVectorizer # test it
+from scipy.sparse import csr_matrix
+from sklearn.metrics import precision_score, recall_score
 
+
+#Unchanged
 def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
     vectorizer = CountVectorizer(
         min_df=0.05, #removes features that do not appear in at least 5% of the data
@@ -37,6 +40,7 @@ def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
     dtm = td.to_numpy()[:, :-1]
     return dtm
 
+#Unchanged
 def LogRegCV(X_train: np.array, y_train: np.array,
            X_test: np.array, y_test: np.array,
            with_bigrams=False
@@ -71,6 +75,7 @@ def LogRegCV(X_train: np.array, y_train: np.array,
         filename = f'plots/cm-logRegr-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-logRegr-{exec_ts}.png'
         disp.plot().figure_.savefig(filename)
 
+#Unchanged
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
                 X_test: np.array, y_test: np.array,
                 with_bigrams=False
@@ -91,6 +96,7 @@ def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
         filename = f'plots/cm-multinomialNB-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-multinomialNB-{exec_ts}.png'
         disp.plot().figure_.savefig(filename)
 
+#Unused
 def check_improvement_in_accuracy(accuracy: float, with_bigrams: bool, accuracies_file: str):
     try:
         acc_df = pd.read_csv(accuracies_file)
@@ -100,135 +106,149 @@ def check_improvement_in_accuracy(accuracy: float, with_bigrams: bool, accuracie
     return all(round(accuracy, 3) > prev_acc for prev_acc in prev_accuracies)
 
 
-def run_tree_experiment(df, train_indexes, test_indexes, labels, extra_train_features=None, 
-                        extra_test_features=None,
-                        model_type='random_forest', feature_sizes=[50, 100, 200, 500, 1000, 2000],
-                        ngram_options=[1,2], random_state=42, extra_features=False):
-    """
-    Run experiments with Decision Tree or Random Forest classifiers.
-
-    Parameters:
-    - df: DataFrame with preprocessed text
-    - train_indexes, test_indexes: lists of indices
-    - labels: numpy array of labels
-    - model_type: 'decision_tree' or 'random_forest'
-    - feature_sizes: list of max_features for vectorization
-    - ngram_options: list of 1 (unigrams) or 2 (unigrams+bigrams)
-    - extra_features: list of extra column names to append (optional)
+def parameter_search(
+    df, train_indexes, test_indexes, labels,
+    model_type='random_forest',
+    feature_sizes=[100, 500, 1000, 2000],
+    ngram_options=[1, 2],
+    vectorizer_types=['count', 'tfidf', 'tfidf_noidf'],
+    extra_features=False,
+    extra_train_features=None,
+    extra_test_features=None,
+    random_state=42, #all random state varibles get the same value 42
+    output_excel="Model_Comparisons.xlsx"):
     
-    Returns:
-    - results_df: CV F1 results
-    - test_results_df: Test F1 and accuracy
-    - last_model: trained model on full training data
-    """
-
     results = []
-    test_results = []
 
-    # Split text and labels
     x_train_text = df.loc[train_indexes, 'text_processed']
     x_test_text = df.loc[test_indexes, 'text_processed']
-    y_train, y_test = labels[train_indexes], labels[test_indexes]
+    y_train = labels[train_indexes]
+    y_test = labels[test_indexes]
 
-    for n_features in feature_sizes:
-        for ngram in ngram_options:
+    for vec_type in vectorizer_types:
+        for n_features in feature_sizes:
+            for ngram in ngram_options:
 
-            # Vectorization
-            vectorizer = TfidfVectorizer(
-                use_idf=True, 
-                min_df=0.05,
-                max_df=0.8,
-                max_features=n_features,
-                lowercase=True,
-                ngram_range=(1, ngram)
-            )
-            x_train_vec = vectorizer.fit_transform(x_train_text)
-            x_test_vec = vectorizer.transform(x_test_text)
-            
-            # Optionally add extra features
-            if extra_features:
-                # Convert pandas Series/DataFrame to numpy arrays
-                extra_train_np = extra_train_features.to_numpy()
-                extra_test_np = extra_test_features.to_numpy()
+                # Vectorizer selection
+                if vec_type == 'count':
+                    
+                    vectorizer = CountVectorizer(
+                        min_df=0.05,
+                        max_df=0.8,
+                        max_features=n_features,
+                        lowercase=True,
+                        ngram_range=(1, ngram)
+                    )
+                elif vec_type == 'tfidf':
+                    vectorizer = TfidfVectorizer(
+                        use_idf=True,
+                        min_df=0.05,
+                        max_df=0.8,
+                        max_features=n_features,
+                        lowercase=True,
+                        ngram_range=(1, ngram)
+                    )
+                elif vec_type == 'tfidf_noidf':
+                    vectorizer = TfidfVectorizer(
+                        use_idf=False,  # TF only (no IDF weighting)
+                        min_df=0.05,
+                        max_df=0.8,
+                        max_features=n_features,
+                        lowercase=True,
+                        ngram_range=(1, ngram)
+                    )
 
-                # Ensure 2D shape
-                if extra_train_features.ndim == 1:
-                    extra_train_np = extra_train_np.reshape(-1, 1)
-                    extra_test_np = extra_test_np.reshape(-1, 1)
+                x_train_vec = vectorizer.fit_transform(x_train_text)
+                x_test_vec = vectorizer.transform(x_test_text)
 
-                # Convert to sparse matrix
-                extra_train = sparse.csr_matrix(extra_train_np)
-                extra_test = sparse.csr_matrix(extra_test_np)
+                # Add optional extra features
+                if extra_features:
+                    extra_train_np = extra_train_features.to_numpy()
+                    extra_test_np = extra_test_features.to_numpy()
 
-                # Stack with text features
-                x_train_vec = hstack([x_train_vec, extra_train])
-                x_test_vec = hstack([x_test_vec, extra_test])
+                    if extra_train_features.ndim == 1:
+                        extra_train_np = extra_train_np.reshape(-1, 1)
+                        extra_test_np = extra_test_np.reshape(-1, 1)
 
-            # Model selection
-            if model_type == 'decision_tree':
-                model = DecisionTreeClassifier(
-                    random_state=random_state,
-                    max_depth=30,
-                    min_samples_split=2,
-                    min_samples_leaf=5,
-                    criterion='gini',
-                    ccp_alpha=0.01
-                )
+                    extra_train = csr_matrix(extra_train_np)
+                    extra_test = csr_matrix(extra_test_np)
 
-            elif model_type == 'random_forest':
-                model = RandomForestClassifier(
-                    n_estimators=200,
-                    max_depth=40,
-                    min_samples_split=10,
-                    min_samples_leaf=2,
-                    max_features='log2',
-                    bootstrap=False,
-                    random_state=42
-                )
-            else:
-                raise ValueError("model_type must be 'decision_tree' or 'random_forest'")
-                           
-            # Cross-validated F1
-            skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-            cv_f1 = np.mean(cross_val_score(model, x_train_vec, y_train, cv=skf, scoring='f1'))
+                    x_train_vec = hstack([x_train_vec, extra_train])
+                    x_test_vec = hstack([x_test_vec, extra_test])
 
-            # Fit full model and predict
-            model.fit(x_train_vec, y_train)
-            y_pred = model.predict(x_test_vec)
-            test_f1 = f1_score(y_test, y_pred)
-            test_acc = accuracy_score(y_test, y_pred)
+                # Model setup
+                if model_type == 'decision_tree':
+                    model = DecisionTreeClassifier(
+                        random_state=random_state,
+                        max_depth=30,
+                        min_samples_split=2,
+                        min_samples_leaf=5,
+                        criterion='gini',
+                        ccp_alpha=0.001
+                    )
+                    
+                elif model_type == 'random_forest':
+                    model = RandomForestClassifier(
+                        n_estimators=200,
+                        max_depth=40,
+                        min_samples_split=10,
+                        min_samples_leaf=2,
+                        max_features='log2',
+                        bootstrap=False,
+                        random_state=random_state
+                    )
+                else:
+                    raise ValueError("model_type == 'decision_tree' or 'random_forest'")
 
-            # Save results
-            results.append({'n_features': n_features, 'ngram': ngram, 'cv_f1': cv_f1})
-            test_results.append({'n_features': n_features, 'ngram': ngram,
-                                 'test_f1': test_f1, 'test_acc': test_acc})
+                # Cross-validation
+                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+                
+                fold_accuracies = []
 
+                for train_idx, val_idx in skf.split(x_train_vec, y_train):
+                    model.fit(x_train_vec[train_idx], y_train[train_idx])
+                    y_val_pred = model.predict(x_train_vec[val_idx])
+                    fold_acc = accuracy_score(y_train[val_idx], y_val_pred)
+                    fold_accuracies.append(fold_acc)
+
+                mean_acc = np.mean(fold_accuracies)
+
+                # Final test set evaluation
+                model.fit(x_train_vec, y_train)
+                y_pred = model.predict(x_test_vec)
+                test_acc = accuracy_score(y_test, y_pred)
+
+                results.append({
+                    'vectorizer': vec_type,
+                    'n_features': n_features,
+                    'ngram': ngram,
+                    'fold_1_acc': fold_accuracies[0],
+                    'fold_2_acc': fold_accuracies[1],
+                    'fold_3_acc': fold_accuracies[2],
+                    'fold_4_acc': fold_accuracies[3],
+                    'fold_5_acc': fold_accuracies[4],
+                    'cv_mean_acc': mean_acc,
+                    'test_acc': test_acc
+                })
+
+    # Export to Excel
     results_df = pd.DataFrame(results)
-    test_results_df = pd.DataFrame(test_results)
+    results_df.to_excel(output_excel, index=False)
+    print("Results exported in Excel File.")
+    
+    return results_df
 
-    return results_df, test_results_df, model
+## Fine tune hyperparameters and evaluate best model ##
+def tune_and_evaluate(
+    x_vec_tr, x_vec_test, labels, train_indexes, test_indexes, 
+    model_type="rf", n_features=1000, ngram_range=(1,2), extra_features=False,
+    extra_train_features=None, extra_test_features=None):
 
-def tune_and_evaluate(x_vec_tr, x_vec_test, labels, train_indexes, test_indexes, 
-                      model_type="rf", n_features=500, ngram_range=(1,1)):
-    """
-    Fine-tune hyperparameters for Random Forest or Decision Tree,
-    train best model, and evaluate on test set.
-
-    Parameters
-    ----------
-    x_vec_tr : Series (train text data)
-    x_vec_test : Series (test text data)
-    labels : array-like (full labels array)
-    train_indexes : list of indices for training set
-    test_indexes : list of indices for test set
-    model_type : str ("rf" for Random Forest, "dt" for Decision Tree)
-    n_features : int, number of features for vectorizer
-    ngram_range : tuple, ngram range for vectorizer
-    """
-
-    #Vectorize text
-    vectorizer = TfidfVectorizer( ########
-        use_idf=True, 
+    # Change Vectorizer based on the best results of previous step 
+    #Decision Trees + Random Forest --> CountVectorizer
+    vectorizer = CountVectorizer(
+        #use_idf=True,
+        #use_idf=False,
         min_df=0.05,
         max_features=n_features,
         lowercase=True,
@@ -237,14 +257,23 @@ def tune_and_evaluate(x_vec_tr, x_vec_test, labels, train_indexes, test_indexes,
     x_train_vec = vectorizer.fit_transform(x_vec_tr)
     x_test_vec = vectorizer.transform(x_vec_test)
 
-    #Labels
+    if extra_features==True:
+        extra_train_np = extra_train_features.to_numpy()
+        extra_test_np = extra_test_features.to_numpy()
+
+        if extra_train_np.ndim == 1:
+            extra_train_np = extra_train_np.reshape(-1, 1)
+            extra_test_np = extra_test_np.reshape(-1, 1)
+
+        x_train_vec = hstack([x_train_vec, sparse.csr_matrix(extra_train_np)])
+        x_test_vec = hstack([x_test_vec, sparse.csr_matrix(extra_test_np)])
+
     y_train, y_test = labels[train_indexes], labels[test_indexes]
 
-    #Choose model and parameter grid
     if model_type == "rf":
         model = RandomForestClassifier(random_state=42)
         param_grid = {
-            'n_estimators': [100, 200, 500],
+            'n_estimators': [50, 100, 200, 500],
             'max_depth': [10, 20, 30, 50, None],
             'min_samples_split': [2, 5, 10, 15, 20],
             'min_samples_leaf': [1, 2, 5, 10, 15],
@@ -261,38 +290,72 @@ def tune_and_evaluate(x_vec_tr, x_vec_test, labels, train_indexes, test_indexes,
             'ccp_alpha': [0.0, 0.001, 0.005, 0.01, 0.1]
         }
     else:
-        raise ValueError("model_type must be 'rf' (Random Forest) or 'dt' (Decision Tree)")
+        raise ValueError("model_type = rf or dt")
 
-    # Cross-validation & Grid Search
+    # CV & Grid Search
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
     grid_search = GridSearchCV(
         estimator=model,
         param_grid=param_grid,
         scoring='f1',
         cv=skf,
         n_jobs=-1,
-        verbose=0
+        verbose=1
     )
     grid_search.fit(x_train_vec, y_train)
 
-    # Best model
     best_model = grid_search.best_estimator_
 
-    #Evaluate on test set
+    # Evaluate on Test Set
     y_pred = best_model.predict(x_test_vec)
+
     test_accuracy = accuracy_score(y_test, y_pred)
     test_f1 = f1_score(y_test, y_pred)
-    
-    ##print(f"Best parameters for {model_type.upper()}:", grid_search.best_params_)
-    ##print("Best CV F1-score:", grid_search.best_score_)
-    ##print("Test Accuracy:", test_accuracy)
-    ##print("Test F1-score:", test_f1)
+    test_precision = precision_score(y_test, y_pred)
+    test_recall = recall_score(y_test, y_pred)
 
-    #Confusion matrix
+    # ====== Confusion Matrix ======
     cm = confusion_matrix(y_test, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0,1])
-    disp.plot()
+    ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0,1]).plot()
+    plt.title(f"Confusion Matrix - {model_type.upper()}")
     plt.show()
 
-    return best_model, grid_search.best_params_,grid_search.best_score_, test_accuracy, test_f1
+    # Extract Feature Importances
+    feature_names = vectorizer.get_feature_names_out().tolist()
+
+    # Append extra feature names if any
+    if extra_train_features is not None:
+        feature_names.extend(list(extra_train_features.columns))
+
+    importances = best_model.feature_importances_
+    feature_importance_df = pd.DataFrame({
+        'Feature': feature_names,
+        'Importance': importances
+    }).sort_values(by='Importance', ascending=False).head(10)
+
+    # Summary OF Results
+    performance_data = {
+        'Model_Type': [model_type.upper()],
+        'Best_Params': [grid_search.best_params_],
+        'CV_Best_F1': [grid_search.best_score_],
+        'Test_Accuracy': [test_accuracy],
+        'Test_Precision': [test_precision],
+        'Test_Recall': [test_recall],
+        'Test_F1': [test_f1],
+        'n_Features': [n_features],
+        'ngram_range': [ngram_range]
+    }
+    performance_df = pd.DataFrame(performance_data)
+
+    # Save to Excel
+    with pd.ExcelWriter("BestModel" + model_type + ".xlsx", engine='openpyxl') as writer:
+        performance_df.to_excel(writer, sheet_name='Performance', index=False)
+        feature_importance_df.to_excel(writer, sheet_name='Top_Features', index=False)
+
+    # Display Summary
+    print(f"\nBest {model_type.upper()} model performance:")
+    print(performance_df)
+    print("\nTop 10 Most Important Features:")
+    print(feature_importance_df)
+
+    return best_model, performance_df, feature_importance_df
