@@ -4,10 +4,8 @@ import string
 import nltk
 import re
 import numpy as np
-import random
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.utils import shuffle
 from models import LogRegCV, MultinomialNaiveBayes, vectorize, extract_lexical_features

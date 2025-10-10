@@ -1,12 +1,23 @@
 import numpy as np
 import pandas as pd
 import os
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_validate
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from datetime import datetime
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import  accuracy_score, f1_score
+import matplotlib.pyplot as plt
+from sklearn.feature_extraction.text import TfidfVectorizer # test it
+from scipy.sparse import csr_matrix
+from nltk.tokenize import word_tokenize
+from sklearn.metrics import precision_score, recall_score
 
 def compute_alpha_values(X_bow: np.array, lexical_X: np.array, y: np.array, base_alpha= 1.0) -> np.array:
     """Given the bag of words representation of the documents 
@@ -19,7 +30,7 @@ def compute_alpha_values(X_bow: np.array, lexical_X: np.array, y: np.array, base
         y (np.array): train labels
 
     Returns:
-        np.array: An np.array with shape (n_features,) containing the alpha value for each features
+        np.array: An np.array with shape (n_features,) containing the alpha value for each feature
     """
     unique_classes = np.unique(y)
     n_features = X_bow.shape[1]
@@ -44,74 +55,88 @@ def compute_alpha_values(X_bow: np.array, lexical_X: np.array, y: np.array, base
     lexical_alphas = np.array([0.1 for i in range(lexical_X.shape[1])])
     return np.concatenate([bow_alphas,lexical_alphas])
 
-from scipy import sparse
-from scipy.sparse import hstack
+def extract_lexical_features(texts):
+    features_list = []
+    for text in texts:
+        features = {}
+        sentences = text.split('.')
+        sentence_lengths = [len(sent.split()) for sent in sentences if sent.strip()]
+        words = word_tokenize(text)
+        unique_words = set(words)
+        features['type_token_ratio'] = len(unique_words) / len(words) if len(words) > 0 else 0
+        features['avg_word_length'] = np.mean([len(word) for word in words]) if words else 0
+        features['char_count'] = len(text)
+        features['word_count'] = len(words)
+        features['sentence_count'] = len([s for s in sentences if s.strip()])
+        features['avg_sentence_length'] = np.mean(sentence_lengths) if sentence_lengths else 0
+        features['punctuation_ratio'] = sum(text.count(p) for p in ['.', ',', '!', '?', ';', ':']) / len(words)
+        features['std_sentence_length'] = np.std(sentence_lengths) if sentence_lengths else 0
+        features_list.append(features)
+    return pd.DataFrame(features_list)
 
-# My imports
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import  accuracy_score, f1_score
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import TfidfVectorizer # test it
-from scipy.sparse import csr_matrix
-from sklearn.metrics import precision_score, recall_score
-
-
-#Unchanged
 def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
     vectorizer = CountVectorizer(
-        min_df=0.05, #removes features that do not appear in at least 5% of the data
+        min_df=0.05, 
         strip_accents='unicode',
         max_features=max_features,
         lowercase=True,
         ngram_range=(1,2) if with_bigrams else (1,1)
     )
-    vectors = vectorizer.fit_transform(df.text_processed) #sparse dataframe with processed text
-    td = pd.DataFrame(vectors.todense()) #make it dense
-    td.columns = vectorizer.get_feature_names_out() #get features names out
-    # td['num_tokens'] = df['text_processed'].map(lambda text: len(word_tokenize(text)))
-    td['doc'] = df['txt_path'].map(lambda p: p.split('/')[-1]) #add column with filename ath the end
-    # convert to matrix
-    dtm = td.to_numpy()[:, :-1]
-    return dtm
+    vectors = vectorizer.fit_transform(df.text_processed)
+    dtm = vectors.toarray()
+    feature_names = vectorizer.get_feature_names_out()
+    return dtm, feature_names
 
-#Unchanged
 def LogRegCV(X_train: np.array, y_train: np.array,
            X_test: np.array, y_test: np.array,
-           with_bigrams=False
+           test_fold:int,
+           with_bigrams=False, k_folds=5,
         ):
     exec_ts = datetime.now()
-    classifier = LogisticRegressionCV(
+    pipeline = make_pipeline(LogisticRegression(
         fit_intercept=True,
-        cv=StratifiedKFold(20, shuffle=True),
+        C=(2),
         class_weight='balanced',
         random_state=42,
         penalty='l1',
         solver='saga',
-        # refit=True,
-        # intercept_scaling=1,
-        # verbose=True
-    ).fit(X_train,y_train)
-    
+        warm_start=True,
+        max_iter=50
+    ))
+    # Define multiple metrics to evaluate
+    scoring = ['accuracy', 'precision', 'recall', 'f1']
+    cv_results = cross_validate(pipeline, X_train, y_train, cv=k_folds, 
+                                scoring=scoring, return_train_score=True)
+    classifier = pipeline.fit(X_train, y_train)
     preds = classifier.predict(X_test)
-    probs = classifier.predict_proba(X_test)
-    logits = classifier.predict_log_proba(X_test)
-    cm = confusion_matrix(y_test, preds)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    N = X_train.shape[1]
-    acc = (y_test == preds).sum() / N
+    acc = classifier.score(X_test, y_test)
+    avgs = {}
+    for score in scoring:
+        avgs[f"test_{score}"] = np.mean(cv_results[f"test_{score}"])
+    
     accuracies_file = 'plots/logRegr-accuracies.csv'
-    if check_improvement_in_accuracy(acc, with_bigrams):
-        accuracies = pd.DataFrame([{'accuracy': round(acc, 3), "with_bigrams": with_bigrams, 'execution_time': exec_ts, 'k': classifier.cv.n_splits}])
-        if not os.path.exists(accuracies_file):
-            accuracies.to_csv(accuracies_file)
-        else:
-            accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
-        filename = f'plots/cm-logRegr-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-logRegr-{exec_ts}.png'
-        disp.plot().figure_.savefig(filename)
+    accuracies = pd.DataFrame([{
+        'test_accuracy': round(acc, 3),
+        "with_bigrams": with_bigrams,
+        'execution_time': exec_ts, 
+        'num_features': X_train.shape[1],
+        'k': k_folds,
+        'avg_val_accuracy': round(avgs['test_accuracy'], 3),
+        'avg_val_precision': round(avgs['test_precision'], 3),
+        'avg_val_recall': round(avgs['test_recall'], 3),
+        'avg_val_f1': round(avgs['test_f1'], 3),
+        'fold': test_fold
+    }])
+    if not os.path.exists(accuracies_file):
+        accuracies.to_csv(accuracies_file)
+    else:
+        accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
+    cm = confusion_matrix(y_test, preds)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)  
+    filename = f'plots/cm-logRegr-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-logRegr-{exec_ts}.png'
+    disp.plot().figure_.savefig(filename)
 
-#Unchanged
+
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
                 X_test: np.array, y_test: np.array,
                 alpha: np.array,
@@ -140,19 +165,28 @@ def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
     classifier = pipeline.fit(X_train, y_train)
     preds = classifier.predict(X_test)
     acc = classifier.score(X_test, y_test)
+    accuracies = pd.DataFrame([{
+        'test_accuracy': round(acc, 3),
+        "with_bigrams": with_bigrams,
+        'execution_time': exec_ts, 
+        'num_features': X_train.shape[1],
+        'k': k_folds,
+        'avg_val_accuracy': round(avgs['test_accuracy'], 3),
+        'avg_val_precision': round(avgs['test_precision'], 3),
+        'avg_val_recall': round(avgs['test_recall'], 3),
+        'avg_val_f1': round(avgs['test_f1'], 3),
+        'fold': test_fold
+    }])
+    if not os.path.exists(accuracies_file):
+        accuracies.to_csv(accuracies_file)
+    else:
+        accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
+    
     cm = confusion_matrix(y_test, preds)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    exec_ts = datetime.now()
-    accuracies_file = 'plots/multinomialNB-accuracies.csv'
-    if check_improvement_in_accuracy(acc, with_bigrams, accuracies_file):
-        accuracies = pd.DataFrame([{'accuracy': round(acc, 3), "with_bigrams": with_bigrams, 'execution_time': exec_ts, 'num_features': X_train.shape[-1]}])
-        if not os.path.exists(accuracies_file):
-            accuracies.to_csv(accuracies_file)
-        else:
-            accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
-        filename = f'plots/cm-multinomialNB-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-multinomialNB-{exec_ts}.png'
-        disp.plot().figure_.savefig(filename)
-
+    filename = f'plots/cm-MultiNB-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-MultiNB-{exec_ts}.png'
+    disp.plot().figure_.savefig(filename)
+    
 #Unused
 def check_improvement_in_accuracy(accuracy: float, with_bigrams: bool, accuracies_file: str):
     try:
