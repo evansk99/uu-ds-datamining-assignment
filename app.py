@@ -12,12 +12,13 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.utils import shuffle
 from models import LogRegCV, MultinomialNaiveBayes, vectorize, extract_lexical_features
 from scipy.sparse import hstack, csr_matrix
+from models import compute_alpha_values
 
 
 nltk.download('stopwords') # comment out after first run
 nltk.download('punkt_tab') # comment out after first run
 # Get English stopwords
-stop_words = {'i', 'my', 'we', 'us', 'not', 'never', 'is', 'are', 'was', 'were', 'could', 'would', 'might', 'should'}
+stop_words = {'i', 'my', 'we', 'us', 'not', 'never', 'is', 'are', 'was', 'were', 'could', 'would', 'might', 'should', 'hotel'}
 
 
 def parse_to_pandas(data_dir: str):
@@ -85,15 +86,19 @@ def main():
     df['text_processed'] = df['text_processed'].map(lambda text: remove_nums(text))
     df['text_processed'] = df['text_processed'].map(lambda text: remove_stopwords(text))
     
+    idx = df.index.tolist()
+    np.random.shuffle(idx)
+    df = df.loc[idx].reset_index(drop=True)
+    
     # Test fold is random
-    test_fold = random.choice(df['fold'].tolist())
+    test_fold = 'fold5' # random.choice(df['fold'].tolist())
     train_indexes = df[df['fold'] != test_fold]['index'].tolist()
     test_indexes = df[df['fold'] == test_fold]['index'].tolist()
     
     # 2.5 text vectorization
     # remove words that appear in less thn 5% of the dataset
-    maxF = 400
-    k = 32
+    maxF = 500
+    k = 5
     use_lexical_features = True
     dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
     dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
@@ -122,12 +127,14 @@ def main():
             k_folds=k, test_fold=test_fold)
     
     # Run Multinomial NB
+    unigrams_alpha_values = compute_alpha_values(X_bow=dtm_unigrams, lexical_X=lexical_features_multiNB, y=labels)
+    bigrams_alpha_values = compute_alpha_values(X_bow=dtm_bigrams, lexical_X=lexical_features_multiNB, y=labels)
     MultinomialNaiveBayes(**unigrams_ds_multiNB,
                           y_train=y_train , y_test=y_test,
-                          k_folds=k, test_fold=test_fold)
+                          k_folds=k, test_fold=test_fold, alpha=unigrams_alpha_values)
     MultinomialNaiveBayes(**bigrams_ds_multiNB,
                           y_train=y_train , y_test=y_test, 
-                          with_bigrams=True, k_folds=k, test_fold=test_fold)
+                          with_bigrams=True, k_folds=k, test_fold=test_fold, alpha=bigrams_alpha_values)
     
 if __name__ == '__main__':
     main()

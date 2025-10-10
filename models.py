@@ -14,6 +14,42 @@ from nltk.tokenize import word_tokenize
 from sklearn.model_selection import StratifiedKFold
 from datetime import datetime
 
+def compute_alpha_values(X_bow: np.array, lexical_X: np.array, y: np.array, base_alpha= 1.0) -> np.array:
+    """Given the bag of words representation of the documents 
+    computes bow feature specific and class aware smoothing values for multi NB.
+    The alpha value is computed for each bow feature based on the feature's class distribution.
+
+    Args:
+        X_bow (np.array): bag of words matrix
+        lexical_X (np.array): extracted lex features matrix
+        y (np.array): train labels
+
+    Returns:
+        np.array: An np.array with shape (n_features,) containing the alpha value for each features
+    """
+    unique_classes = np.unique(y)
+    n_features = X_bow.shape[1]
+    bow_alphas = np.ones(n_features)
+    for feature_idx in range(n_features):
+        feature_counts_by_class = []
+        for cls in unique_classes:
+            class_mask = (y == cls)
+            count_in_class = X_bow[class_mask, feature_idx].sum()
+            feature_counts_by_class.append(count_in_class)
+        
+        feature_counts = np.array(feature_counts_by_class)
+        total_count = feature_counts.sum()
+        
+        if total_count > 0:
+            max_ratio = feature_counts.max() / total_count
+            if max_ratio > 0.8:  # Highly discriminative word
+                bow_alphas[feature_idx] = base_alpha * 0.3
+            elif max_ratio < 0.3:  # Appears evenly
+                bow_alphas[feature_idx] = base_alpha * 2.0
+                
+    lexical_alphas = np.array([0.1 for i in range(lexical_X.shape[1])])
+    return np.concatenate([bow_alphas,lexical_alphas])
+
 
 def extract_lexical_features(texts):
     features_list = []
@@ -99,13 +135,16 @@ def LogRegCV(X_train: np.array, y_train: np.array,
 
 
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
-                X_test: np.array, y_test: np.array, 
-                test_fold: int,with_bigrams=False,
+                X_test: np.array, y_test: np.array,
+                alpha: np.array,
+                test_fold: int, with_bigrams=False,
                 max_features=150, k_folds=5
             ):
-    print(X_train.shape[1])
     pipeline = make_pipeline(
-        MultinomialNB(class_prior=(y_train.sum()/len(y_train), np.count_nonzero(y_train==0)/len(y_train)))
+        MultinomialNB(
+            class_prior=(y_train.sum()/len(y_train), np.count_nonzero(y_train==0)/len(y_train)),
+            alpha=alpha
+        )
     )
 
     # Define multiple metrics to evaluate
