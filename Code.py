@@ -23,7 +23,6 @@ stop_words = set(stopwords.words('english'))
 #Added term 'very' to the stopwords.
 stop_words -={'i', 'my', 'we', 'us', 'not', 'never', 'is', 'are', 'was', 'were', 'could', 'would', 'might', 'should', 'very'}
 
-#Unchanged
 def parse_to_pandas(data_dir: str):
     filenames = []
     dataset = []
@@ -46,16 +45,13 @@ def parse_to_pandas(data_dir: str):
         dataset.append(row)
     return pd.DataFrame(dataset)
 
-#Unchanged
 def remove_puncuation(text: str):
     clean_text = "".join([char for char in text if char not in string.punctuation])
     return clean_text
 
-#Unchanged
 def remove_nums(text: str):
     return "".join([i for i in text if not i.isdigit()])
 
-#Unchanged
 def remove_stopwords(text: str):
     # Remove extent white spaces
     text = re.sub(' +', ' ', text)
@@ -69,8 +65,8 @@ def main():
     # the code assumes the txt files are inside a folder named 'op_spam_v1.4' in the project folder
     
     # 1. Preparation
-    df = parse_to_pandas('Data') ##Changed op_spam to Data but irrelevant
-    df.to_csv('dataset_df.csv')
+    # df = parse_to_pandas('Data') ##Changed op_spam to Data but irrelevant
+    # df.to_csv('dataset_df.csv')
     
     # 2. Pre-processing
     df = pd.read_csv('dataset_df.csv')

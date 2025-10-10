@@ -16,6 +16,8 @@ from sklearn.metrics import  accuracy_score, f1_score
 import matplotlib.pyplot as plt
 from sklearn.feature_extraction.text import TfidfVectorizer # test it
 from scipy.sparse import csr_matrix
+from scipy import sparse
+from scipy.sparse import hstack
 from nltk.tokenize import word_tokenize
 from sklearn.metrics import precision_score, recall_score
 
