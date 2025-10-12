@@ -116,12 +116,12 @@ def main():
             y_train, y_test = labels[train_indexes], labels[test_indexes]
     
             # Run Logistic Regression CV
-            # LogRegCV(**unigrams_ds_logReg,
-            #         y_train=y_train , y_test=y_test,
-            #         k_folds=k, test_fold=test_fold)
-            # LogRegCV(**bigrams_ds_logReg,
-            #         y_train=y_train , y_test=y_test, with_bigrams=True,
-            #         k_folds=k, test_fold=test_fold)
+            LogRegCV(**unigrams_ds_logReg,
+                    y_train=y_train , y_test=y_test,
+                    k_folds=k, test_fold=test_fold)
+            LogRegCV(**bigrams_ds_logReg,
+                    y_train=y_train , y_test=y_test, with_bigrams=True,
+                    k_folds=k, test_fold=test_fold)
             
             # Run Multinomial NB
             unigrams_alpha_values = compute_alpha_values(X_bow=dtm_unigrams, lexical_X=lexical_features_multiNB, y=labels)
