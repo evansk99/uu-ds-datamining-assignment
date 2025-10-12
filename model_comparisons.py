@@ -39,7 +39,7 @@ logReg_df = pd.read_csv('plots/logRegr-accuracies-v2.csv')
 logReg_df = logReg_df[(logReg_df['k'] == k) & (logReg_df['with_bigrams'] == with_bigrams)]
 bestLogReg = logReg_df.loc[logReg_df['test_accuracy'].idxmax()].to_dict()
 bestLogReg_scores = [float(bestLogReg[f"fold{key}"]) for key in range(1,k+1)]
-# model_comparison(f'multiNB_ngram_{n_gram_range}_k_{k}', bestNB_scores, f'logReg_ngram_{n_gram_range}_k_{k}', bestLogReg_scores)
+model_comparison(f'multiNB_ngram_{n_gram_range}_k_{k}', bestNB_scores, f'logReg_ngram_{n_gram_range}_k_{k}', bestLogReg_scores)
 
 # Compare MultiNB and DecTree
 decTree_df = pd.read_csv('dt-accuracies.csv')
