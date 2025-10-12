@@ -123,17 +123,20 @@ def main():
     ### Experiment Setup ##
     
     ### Choose Basic Parameters ####features, unigrams vs bigrams, vectorizer
+    model_type = "random_forest" #  "decision_tree" or "random_forest"
+    k = 10
     results_df = parameter_search( ## name it as you wish haha
         df=df,
         train_indexes=train_indexes,
         test_indexes=test_indexes,
         labels=labels,
-        model_type='decision_tree', #or random_forest
+        model_type=model_type,
         vectorizer_types=['count', 'tfidf', 'tfidf_noidf'],
         feature_sizes=[100, 200, 500, 1000, 2000],
         ngram_options=[1, 2],
         extra_features=False,
-        output_excel="Model_Comparisons.xlsx"
+        output_excel="Model_Comparisons.xlsx",
+        k=k
     )
     
     # pd.set_option('display.max_columns', None)
@@ -148,10 +151,11 @@ def main():
         labels,
         train_indexes,
         test_indexes,
-        model_type="dt",
+        model_type="dt" if model_type=="decision_tree" else  'rf',
         n_features=200,
         ngram_range=(1,1),
-        extra_features=False
+        extra_features=False,
+        k=k
     )    
             
     #best rf without extra features (11FN 13FP) --> 85% acc

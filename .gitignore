@@ -5,3 +5,5 @@ op_spam_v1.4
 __pycache__
 plots
 *.xlsx
+*accuracies.csv
+wilcoxon_comparisons.csv

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+import matplotlib
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import cross_validate
@@ -115,9 +116,13 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     avgs = {}
     for score in scoring:
         avgs[f"test_{score}"] = np.mean(cv_results[f"test_{score}"])
+        
+    fold_accs = {}
+    for i,acc in enumerate(cv_results['test_accuracy']):
+        fold_accs[f"fold{i+1}"] = round(acc, 3)
     
-    accuracies_file = 'plots/logRegr-accuracies.csv'
-    accuracies = pd.DataFrame([{
+    accuracies_file = 'plots/logRegr-accuracies-v2.csv'
+    logData = {
         'test_accuracy': round(acc, 3),
         "with_bigrams": with_bigrams,
         'execution_time': exec_ts, 
@@ -127,16 +132,18 @@ def LogRegCV(X_train: np.array, y_train: np.array,
         'avg_val_precision': round(avgs['test_precision'], 3),
         'avg_val_recall': round(avgs['test_recall'], 3),
         'avg_val_f1': round(avgs['test_f1'], 3),
-        'fold': test_fold
-    }])
+    }
+    logData.update(fold_accs)
+    accuracies = pd.DataFrame([logData])
     if not os.path.exists(accuracies_file):
-        accuracies.to_csv(accuracies_file)
+        accuracies.to_csv(accuracies_file, index=False)
     else:
         accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
     cm = confusion_matrix(y_test, preds)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)  
     filename = f'plots/cm-logRegr-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-logRegr-{exec_ts}.png'
     disp.plot().figure_.savefig(filename)
+    matplotlib.pyplot.close() 
 
 
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
@@ -162,12 +169,15 @@ def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
     for score in scoring:
         avgs[f"test_{score}"] = np.mean(cv_results[f"test_{score}"])
     
-    accuracies_file = 'plots/multinomialNB-accuracies.csv'
-    # if check_improvement_in_accuracy(avgs['test_accuracy'], with_bigrams, accuracies_file):
+    fold_accs = {}
+    for i,acc in enumerate(cv_results['train_accuracy']):
+        fold_accs[f"fold{i+1}"] = round(acc, 3)
+    
+    accuracies_file = 'plots/multinomialNB-accuracies-v2.csv'
     classifier = pipeline.fit(X_train, y_train)
     preds = classifier.predict(X_test)
     acc = classifier.score(X_test, y_test)
-    accuracies = pd.DataFrame([{
+    logData = {
         'test_accuracy': round(acc, 3),
         "with_bigrams": with_bigrams,
         'execution_time': exec_ts, 
@@ -177,10 +187,11 @@ def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
         'avg_val_precision': round(avgs['test_precision'], 3),
         'avg_val_recall': round(avgs['test_recall'], 3),
         'avg_val_f1': round(avgs['test_f1'], 3),
-        'fold': test_fold
-    }])
+    }
+    logData.update(fold_accs)
+    accuracies = pd.DataFrame([logData])
     if not os.path.exists(accuracies_file):
-        accuracies.to_csv(accuracies_file)
+        accuracies.to_csv(accuracies_file, index=False)
     else:
         accuracies.to_csv(accuracies_file, mode='a', header=False, index=False)
     
@@ -188,16 +199,7 @@ def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
     filename = f'plots/cm-MultiNB-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-MultiNB-{exec_ts}.png'
     disp.plot().figure_.savefig(filename)
-    
-#Unused
-def check_improvement_in_accuracy(accuracy: float, with_bigrams: bool, accuracies_file: str):
-    try:
-        acc_df = pd.read_csv(accuracies_file)
-    except Exception:
-        return True
-    prev_accuracies = acc_df[acc_df['with_bigrams'] == with_bigrams].accuracy.tolist()
-    return all(round(accuracy, 3) > prev_acc for prev_acc in prev_accuracies)
-
+    matplotlib.pyplot.close() 
 
 def parameter_search(
     df, train_indexes, test_indexes, labels,
@@ -209,7 +211,9 @@ def parameter_search(
     extra_train_features=None,
     extra_test_features=None,
     random_state=42, #all random state varibles get the same value 42
-    output_excel="Model_Comparisons.xlsx"):
+    output_excel="Model_Comparisons.xlsx",
+    k=5
+    ):
     
     results = []
 
@@ -294,7 +298,7 @@ def parameter_search(
                     raise ValueError("model_type == 'decision_tree' or 'random_forest'")
 
                 # Cross-validation
-                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+                skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
                 
                 fold_accuracies = []
 
@@ -321,7 +325,8 @@ def parameter_search(
                     'fold_4_acc': fold_accuracies[3],
                     'fold_5_acc': fold_accuracies[4],
                     'cv_mean_acc': mean_acc,
-                    'test_acc': test_acc
+                    'test_acc': test_acc,
+                    'k': k
                 })
 
     # Export to Excel
@@ -335,7 +340,7 @@ def parameter_search(
 def tune_and_evaluate(
     x_vec_tr, x_vec_test, labels, train_indexes, test_indexes, 
     model_type="rf", n_features=1000, ngram_range=(1,2), extra_features=False,
-    extra_train_features=None, extra_test_features=None):
+    extra_train_features=None, extra_test_features=None, k=5):
 
     # Change Vectorizer based on the best results of previous step 
     #Decision Trees + Random Forest --> CountVectorizer
@@ -366,12 +371,13 @@ def tune_and_evaluate(
     if model_type == "rf":
         model = RandomForestClassifier(random_state=42)
         param_grid = {
-            'n_estimators': [50, 100, 200, 500],
-            'max_depth': [10, 20, 30, 50, None],
-            'min_samples_split': [2, 5, 10, 15, 20],
-            'min_samples_leaf': [1, 2, 5, 10, 15],
-            'max_features': ['sqrt', 'log2'],
-            'bootstrap': [True, False]
+            'n_estimators': [100, 200, 500],
+            'max_depth': [10, 20, 30, None],
+            'min_samples_split': [2, 5, 10, 15],
+            'min_samples_leaf': [1, 2, 5, 10],
+            'max_features': ['log2'],
+            'bootstrap': [True, False],
+            'ccp_alpha': [0.0, 0.001, 0.01]
         }
     elif model_type == "dt":
         model = DecisionTreeClassifier(random_state=42)
@@ -386,7 +392,7 @@ def tune_and_evaluate(
         raise ValueError("model_type = rf or dt")
 
     # CV & Grid Search
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
     grid_search = GridSearchCV(
         estimator=model,
         param_grid=param_grid,
@@ -398,7 +404,12 @@ def tune_and_evaluate(
     grid_search.fit(x_train_vec, y_train)
 
     best_model = grid_search.best_estimator_
-
+    best_model_cv_results = run_cv_forests_trees(best_model, x_train_vec, x_test_vec, y_train, y_test, n_features, skf)
+    cv_file = f"{model_type}-accuracies.csv"
+    if not os.path.exists(cv_file):
+        best_model_cv_results.to_csv(cv_file, index=False)
+    else:
+        best_model_cv_results.to_csv(cv_file, mode='a', header=False, index=False)
     # Evaluate on Test Set
     y_pred = best_model.predict(x_test_vec)
 
@@ -452,3 +463,37 @@ def tune_and_evaluate(
     print(feature_importance_df)
 
     return best_model, performance_df, feature_importance_df
+
+
+
+def run_cv_forests_trees(best_model, x_train_vec, x_test_vec, y_train, y_test, n_features, skf) -> pd.DataFrame:
+    # Cross-validation on training set with the best parameters
+    fold_accuracies = []
+    
+    for train_idx, val_idx in skf.split(x_train_vec, y_train):
+        # Fit best model on training fold
+        best_model.fit(x_train_vec[train_idx], y_train[train_idx])
+        y_val_pred = best_model.predict(x_train_vec[val_idx])
+        fold_acc = accuracy_score(y_train[val_idx], y_val_pred)
+        fold_accuracies.append(fold_acc)
+    
+    mean_acc = np.mean(fold_accuracies)
+    
+    # Evaluate on test set
+    best_model.fit(x_train_vec, y_train)
+    y_test_pred = best_model.predict(x_test_vec)
+    test_acc = accuracy_score(y_test, y_test_pred)
+    
+    # Save results in a structured way
+    results = pd.DataFrame([{
+        'n_features': n_features,  # or store other relevant params
+        'fold_1_acc': fold_accuracies[0],
+        'fold_2_acc': fold_accuracies[1],
+        'fold_3_acc': fold_accuracies[2],
+        'fold_4_acc': fold_accuracies[3],
+        'fold_5_acc': fold_accuracies[4],
+        'cv_mean_acc': mean_acc,
+        'test_acc': test_acc,
+        'k': skf.n_splits
+    }])
+    return results

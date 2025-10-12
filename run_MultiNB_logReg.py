@@ -88,51 +88,50 @@ def main():
     np.random.shuffle(idx)
     df = df.loc[idx].reset_index(drop=True)
     
-    # Test fold is random
-    test_fold = 'fold5' # random.choice(df['fold'].tolist())
+    test_fold = 'fold5' 
     train_indexes = df[df['fold'] != test_fold]['index'].tolist()
     test_indexes = df[df['fold'] == test_fold]['index'].tolist()
     
     # 2.5 text vectorization
     # remove words that appear in less thn 5% of the dataset
-    maxF = 500
-    k = 5
-    use_lexical_features = True
-    dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
-    dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
-    if use_lexical_features:
-        dtm_unigrams_logReg = np.hstack((dtm_unigrams, lexical_features_logReg))
-        dtm_bigrams_logReg = np.hstack((dtm_bigrams, lexical_features_logReg))
-        dtm_unigrams_multiNB = np.hstack((dtm_unigrams, lexical_features_multiNB))
-        dtm_bigrams_multiNB = np.hstack((dtm_bigrams, lexical_features_multiNB))
+    for k in [16,32]:
+        for maxF in [400,450,500,550,600]:
+            use_lexical_features = True
+            dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
+            dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
+            if use_lexical_features:
+                dtm_unigrams_logReg = np.hstack((dtm_unigrams, lexical_features_logReg))
+                dtm_bigrams_logReg = np.hstack((dtm_bigrams, lexical_features_logReg))
+                dtm_unigrams_multiNB = np.hstack((dtm_unigrams, lexical_features_multiNB))
+                dtm_bigrams_multiNB = np.hstack((dtm_bigrams, lexical_features_multiNB))
+            
+            # 3. labeling 0: deceptive, 1: truthful
+            labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
+            
+            # 4. split
+            unigrams_ds_logReg = {'X_train': dtm_unigrams_logReg[train_indexes, :], 'X_test': dtm_unigrams_logReg[test_indexes, :]}
+            bigrams_ds_logReg = {'X_train': dtm_bigrams_logReg[train_indexes, :], 'X_test': dtm_bigrams_logReg[test_indexes, :]}
+            unigrams_ds_multiNB = {'X_train': dtm_unigrams_multiNB[train_indexes, :], 'X_test': dtm_unigrams_multiNB[test_indexes, :]}
+            bigrams_ds_multiNB = {'X_train': dtm_bigrams_multiNB[train_indexes, :], 'X_test': dtm_bigrams_multiNB[test_indexes, :]}
+            y_train, y_test = labels[train_indexes], labels[test_indexes]
     
-    # 3. labeling 0: deceptive, 1: truthful
-    labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
-    
-    # 4. split
-    unigrams_ds_logReg = {'X_train': dtm_unigrams_logReg[train_indexes, :], 'X_test': dtm_unigrams_logReg[test_indexes, :]}
-    bigrams_ds_logReg = {'X_train': dtm_bigrams_logReg[train_indexes, :], 'X_test': dtm_bigrams_logReg[test_indexes, :]}
-    unigrams_ds_multiNB = {'X_train': dtm_unigrams_multiNB[train_indexes, :], 'X_test': dtm_unigrams_multiNB[test_indexes, :]}
-    bigrams_ds_multiNB = {'X_train': dtm_bigrams_multiNB[train_indexes, :], 'X_test': dtm_bigrams_multiNB[test_indexes, :]}
-    y_train, y_test = labels[train_indexes], labels[test_indexes]
-    
-    # Run Logistic Regression CV
-    LogRegCV(**unigrams_ds_logReg,
-            y_train=y_train , y_test=y_test,
-            k_folds=k, test_fold=test_fold)
-    LogRegCV(**bigrams_ds_logReg,
-            y_train=y_train , y_test=y_test, with_bigrams=True,
-            k_folds=k, test_fold=test_fold)
-    
-    # Run Multinomial NB
-    unigrams_alpha_values = compute_alpha_values(X_bow=dtm_unigrams, lexical_X=lexical_features_multiNB, y=labels)
-    bigrams_alpha_values = compute_alpha_values(X_bow=dtm_bigrams, lexical_X=lexical_features_multiNB, y=labels)
-    MultinomialNaiveBayes(**unigrams_ds_multiNB,
-                          y_train=y_train , y_test=y_test,
-                          k_folds=k, test_fold=test_fold, alpha=unigrams_alpha_values)
-    MultinomialNaiveBayes(**bigrams_ds_multiNB,
-                          y_train=y_train , y_test=y_test, 
-                          with_bigrams=True, k_folds=k, test_fold=test_fold, alpha=bigrams_alpha_values)
-    
+            # Run Logistic Regression CV
+            # LogRegCV(**unigrams_ds_logReg,
+            #         y_train=y_train , y_test=y_test,
+            #         k_folds=k, test_fold=test_fold)
+            # LogRegCV(**bigrams_ds_logReg,
+            #         y_train=y_train , y_test=y_test, with_bigrams=True,
+            #         k_folds=k, test_fold=test_fold)
+            
+            # Run Multinomial NB
+            unigrams_alpha_values = compute_alpha_values(X_bow=dtm_unigrams, lexical_X=lexical_features_multiNB, y=labels)
+            bigrams_alpha_values = compute_alpha_values(X_bow=dtm_bigrams, lexical_X=lexical_features_multiNB, y=labels)
+            MultinomialNaiveBayes(**unigrams_ds_multiNB,
+                                y_train=y_train , y_test=y_test,
+                                k_folds=k, test_fold=test_fold, alpha=unigrams_alpha_values)
+            MultinomialNaiveBayes(**bigrams_ds_multiNB,
+                                y_train=y_train , y_test=y_test,
+                                with_bigrams=True, k_folds=k, test_fold=test_fold, alpha=bigrams_alpha_values)
+            
 if __name__ == '__main__':
     main()
