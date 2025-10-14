@@ -2,6 +2,11 @@ import pandas as pd
 import os
 from scipy.stats import wilcoxon
 
+NB_SCORES_PATH = 'plots/multinomialNB-accuracies-v2.csv'
+LOGREG_SCORES_PATH = 'plots/logRegr-accuracies-v2.csv'
+DECTREE_SCORES_PATH = 'dt-accuracies.csv'
+RANDFOR_SCORES_PATH = 'rf-accuracies.csv'
+
 
 def model_comparison(
     model1_name: str,
@@ -26,23 +31,40 @@ def model_comparison(
         res.to_csv(comps_file, index=False, header=False, mode='a')
 
 
-k = int(input('K [5,10,16,32]:'))
-n_gram_range = int(input('n_gram_range [1,2]:'))
-
-# Compare MultiNB and LogRegr
-with_bigrams = True if n_gram_range == 2 else False
-multiNB_df = pd.read_csv('plots/multinomialNB-accuracies-v2.csv')
-multiNB_df = multiNB_df[(multiNB_df['k'] == k) & (multiNB_df['with_bigrams'] == with_bigrams)]
+k = 5
+# MultiNB vs LogRegr
+multiNB_df = pd.read_csv(NB_SCORES_PATH)
+multiNB_df = multiNB_df[(multiNB_df['k'] == k)]
 bestNB = multiNB_df.loc[multiNB_df['test_accuracy'].idxmax()].to_dict()
 bestNB_scores = [float(bestNB[f"fold{key}"]) for key in range(1,k+1)]
-logReg_df = pd.read_csv('plots/logRegr-accuracies-v2.csv')
-logReg_df = logReg_df[(logReg_df['k'] == k) & (logReg_df['with_bigrams'] == with_bigrams)]
+logReg_df = pd.read_csv(LOGREG_SCORES_PATH)
+logReg_df = logReg_df[(logReg_df['k'] == k)]
 bestLogReg = logReg_df.loc[logReg_df['test_accuracy'].idxmax()].to_dict()
 bestLogReg_scores = [float(bestLogReg[f"fold{key}"]) for key in range(1,k+1)]
-model_comparison(f'multiNB_ngram_{n_gram_range}_k_{k}', bestNB_scores, f'logReg_ngram_{n_gram_range}_k_{k}', bestLogReg_scores)
+model_comparison(f'multiNB_k_{k}', bestNB_scores, f'logReg_k_{k}', bestLogReg_scores)
 
-# Compare MultiNB and DecTree
-decTree_df = pd.read_csv('dt-accuracies.csv')
+# MultiNB vs DecTree
+decTree_df = pd.read_csv(DECTREE_SCORES_PATH)
 decTree = decTree_df[decTree_df['k'] == k].iloc[0].to_dict()
 decTree_scores = [float(decTree[f'fold_{key}_acc']) for key in range(1,k+1)]
-model_comparison(f'multiNB_ngram_{n_gram_range}_k_{k}', bestNB_scores, f'decTree_k_{k}', decTree_scores)
+model_comparison(f'multiNB_k_{k}', bestNB_scores, f'decTree_k_{k}', decTree_scores)
+
+# LogReg vs DecTree
+model_comparison(f'logReg_k_{k}', bestLogReg_scores, f'decTree_k_{k}', decTree_scores)
+
+# MultiNB vs RandForr
+randForr_df = pd.read_csv(RANDFOR_SCORES_PATH)
+randForr = randForr_df[randForr_df['k'] == k].iloc[0].to_dict()
+randForr_scores = [float(randForr[f'fold_{key}_acc']) for key in range(1,k+1)]
+model_comparison(f'multiNB_k_{k}', bestNB_scores, f'randForr_k_{k}', randForr_scores)
+
+# LogReg vs RandForr
+model_comparison(f'logReg_k_{k}', bestLogReg_scores, f'randForr_k_{k}', randForr_scores)
+
+# MultiNB vs tree ensemble
+
+# LogReg vs tree ensemble
+
+# DecTree vs tree ensemble
+
+# RandForr vs tree ensemble
