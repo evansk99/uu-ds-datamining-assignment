@@ -6,7 +6,6 @@ __pycache__
 plots
 *.xlsx
 *accuracies.csv
-wilcoxon_comparisons.csv
 gb*.csv
 gradBoost*.csv
 non_crucial*.csv

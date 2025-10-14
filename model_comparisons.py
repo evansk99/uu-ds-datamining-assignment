@@ -6,6 +6,11 @@ NB_SCORES_PATH = 'plots/multinomialNB-accuracies-v2.csv'
 LOGREG_SCORES_PATH = 'plots/logRegr-accuracies-v2.csv'
 DECTREE_SCORES_PATH = 'dt-accuracies.csv'
 RANDFOR_SCORES_PATH = 'rf-accuracies.csv'
+GRAD_BOOST_SCORES_PATH = 'gradBoost-accuracies-v2.csv'
+
+comps_file = 'wilcoxon_comparisons.csv'
+if os.path.exists(comps_file):
+    os.remove(comps_file)
 
 
 def model_comparison(
@@ -18,7 +23,6 @@ def model_comparison(
         return NameError("Models need to have been trained on same number of folds")
     
     stat, p = wilcoxon(model1_score, model2_score)
-    comps_file = 'wilcoxon_comparisons.csv'
     res = pd.DataFrame([{
         "model1": model1_name,
         "model2": model2_name,
@@ -61,10 +65,20 @@ model_comparison(f'multiNB_k_{k}', bestNB_scores, f'randForr_k_{k}', randForr_sc
 # LogReg vs RandForr
 model_comparison(f'logReg_k_{k}', bestLogReg_scores, f'randForr_k_{k}', randForr_scores)
 
-# MultiNB vs tree ensemble
+# DecTree vs RandForr
+model_comparison(f'randForr_k_{k}', randForr_scores, f'decTree_k_{k}', decTree_scores)
 
-# LogReg vs tree ensemble
+# MultiNB vs Grad Boost
+gradBoost_df = pd.read_csv(GRAD_BOOST_SCORES_PATH)
+gradBoost_df = gradBoost_df.loc[gradBoost_df['test_accuracy'].idxmax()].to_dict()
+gradBoost_scores = [float(gradBoost_df[f'fold{key}']) for key in range(1,k+1)]
+model_comparison(f'multiNB_k_{k}', bestNB_scores, f'gradBoost_k_{k}', gradBoost_scores)
 
-# DecTree vs tree ensemble
+# LogReg vs Grad Boost
+model_comparison(f'logReg_k_{k}', bestLogReg_scores, f'gradBoost_k_{k}', gradBoost_scores)
 
-# RandForr vs tree ensemble
+# DecTree vs Grad Boost
+model_comparison(f'decTree_k_{k}', decTree_scores, f'gradBoost_k_{k}', gradBoost_scores)
+
+# RandForr vs Grad Boost
+model_comparison(f'randForr_k_{k}', randForr_scores, f'gradBoost_k_{k}', gradBoost_scores)

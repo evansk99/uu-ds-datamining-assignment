@@ -1,0 +1,11 @@
+model1,model2,stat,p
+multiNB_k_5,logReg_k_5,0.0,0.0625
+multiNB_k_5,decTree_k_5,0.0,0.0625
+logReg_k_5,decTree_k_5,0.0,0.0625
+multiNB_k_5,randForr_k_5,0.0,0.0625
+logReg_k_5,randForr_k_5,7.0,1.0
+randForr_k_5,decTree_k_5,0.0,0.0625
+multiNB_k_5,gradBoost_k_5,0.0,0.0625
+logReg_k_5,gradBoost_k_5,3.0,0.3125
+decTree_k_5,gradBoost_k_5,0.0,0.0625
+randForr_k_5,gradBoost_k_5,2.0,0.1875
