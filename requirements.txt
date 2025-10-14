@@ -1,4 +1,5 @@
 black
+collections
 flake8
 matplotlib
 mypy
