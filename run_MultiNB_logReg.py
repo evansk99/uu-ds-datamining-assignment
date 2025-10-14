@@ -55,7 +55,6 @@ def remove_stopwords(text: str):
     filtered_tokens = [word for word in tokens if word not in stop_words]
     return " ".join(filtered_tokens)
     
-    
 def main():
     # the code assumes the txt files are inside a folder named 'op_spam_v1.4' in the project folder
     # 1. preparation
@@ -94,8 +93,8 @@ def main():
     
     # 2.5 text vectorization
     # remove words that appear in less thn 5% of the dataset
-    for k in [16,32]:
-        for maxF in [400,450,500,550,600]:
+    for k in [5,10]:
+        for maxF in [150,200,250,300,350,400,450,500,550]:
             use_lexical_features = True
             dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
             dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)

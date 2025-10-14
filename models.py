@@ -20,6 +20,7 @@ from scipy.sparse import csr_matrix
 from scipy import sparse
 from scipy.sparse import hstack
 from nltk.tokenize import word_tokenize
+from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import precision_score, recall_score
 
 def compute_alpha_values(X_bow: np.array, lexical_X: np.array, y: np.array, base_alpha= 1.0) -> np.array:
@@ -74,6 +75,10 @@ def extract_lexical_features(texts):
         features['avg_sentence_length'] = np.mean(sentence_lengths) if sentence_lengths else 0
         features['punctuation_ratio'] = sum(text.count(p) for p in ['.', ',', '!', '?', ';', ':']) / len(words)
         features['std_sentence_length'] = np.std(sentence_lengths) if sentence_lengths else 0
+        #Extra Features Text length and Sentiment (include as extra features)
+        analyzer = SentimentIntensityAnalyzer()
+        features['sentiment'] = analyzer.polarity_scores(text)['compound']
+    
         features_list.append(features)
     return pd.DataFrame(features_list)
 
@@ -90,6 +95,11 @@ def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
     feature_names = vectorizer.get_feature_names_out()
     return dtm, feature_names
 
+def gridSearch(pipeline, params, X, y, k=5):
+    gs = GridSearchCV(pipeline, param_grid=params, cv=StratifiedKFold(k, shuffle=True, random_state=42), scoring='f1', verbose=1)
+    gs.fit(X,y)
+    return gs.best_estimator_
+    
 def LogRegCV(X_train: np.array, y_train: np.array,
            X_test: np.array, y_test: np.array,
            test_fold:int,
@@ -98,19 +108,23 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     exec_ts = datetime.now()
     pipeline = make_pipeline(LogisticRegression(
         fit_intercept=True,
-        C=(2),
-        class_weight='balanced',
-        random_state=42,
         penalty='l1',
-        solver='saga',
         warm_start=True,
-        max_iter=50
+        max_iter=10000
     ))
+    classifier = gridSearch(
+        pipeline, 
+        params={
+            'logisticregression__C': [0.1,0.7,1,2],
+            'logisticregression__solver': ['liblinear', 'saga']
+        },
+        X=X_train,y=y_train
+    )
     # Define multiple metrics to evaluate
     scoring = ['accuracy', 'precision', 'recall', 'f1']
-    cv_results = cross_validate(pipeline, X_train, y_train, cv=k_folds, 
+    cv_results = cross_validate(classifier, X_train, y_train, cv=k_folds, 
                                 scoring=scoring, return_train_score=True)
-    classifier = pipeline.fit(X_train, y_train)
+    classifier = classifier.fit(X_train, y_train)
     preds = classifier.predict(X_test)
     acc = classifier.score(X_test, y_test)
     avgs = {}
