@@ -6,16 +6,11 @@ import re
 import numpy as np
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from nltk.sentiment import SentimentIntensityAnalyzer
-from models import LogRegCV, MultinomialNaiveBayes, parameter_search, tune_and_evaluate, vectorize #Me
-
+from models import parameter_search, tune_and_evaluate, extract_lexical_features
+from collections import Counter 
 
 #nltk.download('stopwords') # comment out after first run
 #nltk.download('punkt_tab') # comment out after first run
-
-#My imports
-from collections import Counter 
-import matplotlib.pyplot as plt
 
 # Get English stopwords
 stop_words = set(stopwords.words('english'))
@@ -59,26 +54,9 @@ def remove_stopwords(text: str):
     # Remove stopwords
     filtered_tokens = [word for word in tokens if word not in stop_words]
     return " ".join(filtered_tokens)
-    
-    
-def main():
-    # the code assumes the txt files are inside a folder named 'op_spam_v1.4' in the project folder
-    
-    # 1. Preparation
-    # df = parse_to_pandas('Data') ##Changed op_spam to Data but irrelevant
-    # df.to_csv('dataset_df.csv')
-    
-    # 2. Pre-processing
-    df = pd.read_csv('dataset_df.csv')
-    df = df[df['polarity'].str.contains('negative')]
-    df['text'] = df['txt_path'].map(lambda path: open(path,'r').read())
-    df['text_processed'] = df['text'].map(lambda text: remove_puncuation(text))
-    df['text_processed'] = df['text_processed'].map(lambda text: text.lower())
-    df['text_processed'] = df['text_processed'].map(lambda text: remove_nums(text))
-    df['text_processed'] = df['text_processed'].map(lambda text: remove_stopwords(text)) 
-    
-    ### Feature Extraction ### + exploratory analysis
-    #Unique Words Before Removing  Stop Words
+
+#Returns unique words per category and top 10 most common words per category if we exclude common stop words
+def ExploratoryDataAnalysis(df): 
     text_deceipt = "".join(df.iloc[0:400]['text_processed']) #Class 0
     words_deceipt = text_deceipt.split()
     word_count0 = Counter(words_deceipt)
@@ -90,42 +68,60 @@ def main():
     words_true =  text_true.split()
     word_count1 = Counter(words_true)
     unique_true = len(set(words_true))
-    top_10_true = word_count1.most_common(30)
+    top_10_true = word_count1.most_common(10)
     
-    # print("Total Words 0: ",len(words_deceipt))
-    # print("Unique Words 0: ", unique_deceipt)
-    # print("Top 10 Words 0: ", top_10_deceipt)
-    # print("Total Words 1: ", len(words_true))
-    # print("Unique Words 1: ", unique_true)
-    # print("Top 10 Words 1: ", top_10_true)
+    print("Unique Words in Deceiptful Negative Reviews: " +str(unique_deceipt) + "\nUnique Words in True Negative Reviews: " +str(unique_true))
+    df_common_words=pd.DataFrame({"Top 10 Dec": top_10_deceipt, "Top 10 True" : top_10_true})
+    print(df_common_words)
+    return
     
-    # df_common_words=pd.DataFrame({"Top 10 Dec": top_10_deceipt, "Top 10 True" : top_10_true})
-    # print(df_common_words)
+def main():
+    # the code assumes the txt files are inside a folder named 'op_spam_v1.4' in the project folder
+    
+    # 1. Preparation
+    df = parse_to_pandas('op_spam_v1.4') ##Changed op_spam to Data but irrelevant
+    df.to_csv('dataset_df.csv')
+    
+    # 2. Pre-processing
+    df = pd.read_csv('dataset_df.csv')
+    df = df[df['polarity'].str.contains('negative')]
+    df['text'] = df['txt_path'].map(lambda path: open(path,'r').read())
+    lexical_features = extract_lexical_features(df['text'].tolist())
+    df['text_processed'] = df['text'].map(lambda text: remove_puncuation(text))
+    df['text_processed'] = df['text_processed'].map(lambda text: text.lower())
+    df['text_processed'] = df['text_processed'].map(lambda text: remove_nums(text))
+    df['text_processed'] = df['text_processed'].map(lambda text: remove_stopwords(text)) 
+    
+    # Exploratory analysis of dataset
+    #Unique Words after Removing  Stop Words
+    #ExploratoryDataAnalysis(df)
 
-    ### Feature Extraction ###
     #Train and test data positions
     train_indexes = df[df['fold'] != 'fold5'].index.tolist()
     test_indexes = df[df['fold'] == 'fold5'].index.tolist()
-
-    #Extra Features Text length and Sentiment (include as extra features)
-    analyzer = SentimentIntensityAnalyzer()
-    df['word_count'] = df['text'].apply(lambda x: len(x.split()))
-    df['sentiment'] = df['text'].apply(lambda x: analyzer.polarity_scores(x)['compound']) #overal negativity
-    df['exclam_count'] = df['text'].apply(lambda x: x.count('!')) #count exclamations -->exclude if you want
     
-    #Split Dataset (defined seperately)
+    # 3. Split Dataset (defined seperately)
     x_train=df.loc[train_indexes,'text_processed']
     x_test=df.loc[test_indexes,'text_processed']
 
     # Labeling 0 : Deceptive, 1 : Truthful 
     labels = np.array(df['txt_path'].map(lambda path: np.array(0) if 'deceptive' in path else np.array(1)).tolist())
 
-    ### Experiment Setup ##
+    ## 4. Experiment Setup ##
     
-    ### Choose Basic Parameters ####features, unigrams vs bigrams, vectorizer
-    model_type = "random_forest" #  "decision_tree" or "random_forest"
-    k = 10
-    results_df = parameter_search( ## name it as you wish haha
+    #Add Extra Features? (True False)
+    feats=False
+    if(feats):        
+        extra_train_features=lexical_features.iloc[train_indexes]
+        extra_test_features=lexical_features.iloc[test_indexes]    
+    else:
+        extra_train_features=None
+        extra_test_features=None
+
+    # Find good set of Basic Hyperparameters # # of features, vectorizer, unigrams vs bigrams
+    model_type = "decision_tree" #  "decision_tree" or "random_forest"
+    k = 5 #Number of Folds
+    results_df = parameter_search(
         df=df,
         train_indexes=train_indexes,
         test_indexes=test_indexes,
@@ -134,11 +130,14 @@ def main():
         vectorizer_types=['count', 'tfidf', 'tfidf_noidf'],
         feature_sizes=[100, 200, 500, 1000, 2000],
         ngram_options=[1, 2],
-        extra_features=False,
+        extra_features=feats,
+        extra_train_features=extra_train_features,
+        extra_test_features=extra_test_features,        
         output_excel="Model_Comparisons.xlsx",
         k=k
     )
     
+    #Display performance of different models on console apart from Excel
     # pd.set_option('display.max_columns', None)
     # pd.set_option('display.width', 120)
     # print(results_df)
@@ -153,17 +152,19 @@ def main():
         test_indexes,
         model_type="dt" if model_type=="decision_tree" else  'rf',
         n_features=200,
-        ngram_range=(1,1),
-        extra_features=False,
+        ngram_range=(1,2),
+        extra_features=feats,
+        extra_train_features=extra_train_features,
+        extra_test_features=extra_test_features, 
         k=k
     )    
             
-    #best rf without extra features (11FN 13FP) --> 85% acc
+    #best rf without extra features --> ~85% test acc
     #model_type="rf",
     #n_features=2000,
     #ngram_range=(1,2)
     
-    #best dt without extra features --> 70% acc
+    #best dt without extra features --> ~71% test acc
     #model_type="dt",
     #n_features=200,
     #ngram_range=(1,1)
