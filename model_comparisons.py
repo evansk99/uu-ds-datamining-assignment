@@ -25,7 +25,9 @@ def model_comparison(
     stat, p = wilcoxon(model1_score, model2_score)
     res = pd.DataFrame([{
         "model1": model1_name,
+        "model1_scores": ",".join([str(s) for s in model1_score]),
         "model2": model2_name,
+        "model2_scores": ",".join([str(s) for s in model2_score]),
         "stat": stat,
         "p": p
     }])
