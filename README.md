@@ -14,8 +14,8 @@
 ## Implementation of Classification Tree and Random Forest
 <p>
 Both classification tree and random forest algorithms can be executed through `run_decTree_randFor.py` by setting the desired model_type. 
-The user needs to choose the desirable parameters at section 4. Experiment Setup. 
-i)Parameter "feats" can be set to True to feed a set of 9 extra engineered features in addition to the bag of words features to the models. 
-ii)The function parameter_search can be configured to run based on model_type="decision_tree" or "random_forest", different vectorizer_types=['count', 'tfidf', 'tfidf_noidf'], number of features through feature_sizes=[100, 200, 500, 1000, 2000] and ngram_options=[1, 2] (1 for unigram and 2 for uni+bigrams). The result is an excel export that dictates the cross validation accuracy of each configuration in order to uncover high potential settings for the values of the hyperparameters above.
+The user needs to choose the desirable parameters at section 4. Experiment Setup. <br>
+i)Parameter "feats" can be set to True to feed a set of 9 extra engineered features in addition to the bag of words features to the models. <br>
+ii)The function parameter_search can be configured to run based on model_type="decision_tree" or "random_forest", different vectorizer_types=['count', 'tfidf', 'tfidf_noidf'], number of features through feature_sizes=[100, 200, 500, 1000, 2000] and ngram_options=[1, 2] (1 for unigram and 2 for uni+bigrams). The result is an excel export that dictates the cross validation accuracy of each configuration in order to uncover high potential settings for the values of the hyperparameters above.<br>
 iii)The funtion tune_and_evaluate can be manually configured with suitable model_type="dt"/"rf" n_features and ngram_range values in order for an exhaustive grid search to provide the best performing model by fine-tuning/testing a set of hyperparameters for each algorithm.
  </p>
