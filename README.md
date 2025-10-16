@@ -20,7 +20,7 @@ ii)The function parameter_search can be configured to run based on model_type="d
 iii)The funtion tune_and_evaluate can be manually configured with suitable model_type="dt"/"rf" n_features and ngram_range values in order for an exhaustive grid search to provide the best performing model by fine-tuning/testing a set of hyperparameters for each algorithm.
  </p>
 
-##Implementation of Gradient Boosting
+## Implementation of Gradient boosting
 Gradient Boosting is executed through run_gradBoost.py. The script reads dataset_df.csv, loads OP Spam v1.4 from DATA_ROOT, vectorizes text with Count or TF-IDF using unigrams or unigrams+bigrams, caps features at 500 or 1,000 with min_df=0.02, trains on folds 1–4, and evaluates on fold 5. Configure options in the Config section, then run python run_gradBoost.py.
 i) Choose the text setup via VECTORIZERS=['count','tfidf'], NGRAMS=[(1,1),(1,2)], FEATURE_SIZES=[500,1000], and MIN_DF=0.02.
  ii) randomized_for_combo runs RandomizedSearchCV on GradientBoostingClassifier with five-fold stratified CV, shuffling, accuracy scoring, and random_state=42, drawing 60 configurations that vary: number of trees, learning rate, max depth, subsample, min samples per leaf, min samples to split, and max features.
