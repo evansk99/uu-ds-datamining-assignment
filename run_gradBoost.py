@@ -1,19 +1,5 @@
 # =====================================
-# Gradient Boosting — randomized search + non-crucial info (FAST PROFILE)
-# =====================================
-# Unchanged outputs:
-#   GradientBoosting.xlsx (sheet "Search")
-#   gb_best_params.csv, gb_best_cv.csv, gb_confusion.csv, gb_predictions_fold5.csv
-#   gb_top5_truthful.csv, gb_top5_deceptive.csv, gradBoost-accuracies.csv
-#   non_crucial_* CSV files
-#
-# NEW / MODIFIED (speed-ups, duplicates removed):
-#   gradBoost-accuracies-v2.csv          ← many rows (fold1..fold5 + test_accuracy)
-#   gradBoost-accuracies-v2-params.csv   ← same + GB hyperparameters + vectorizer info
-#   hard_replace_search_sheet()          ← keeps Excel "Search" clean every run (single write)
-#   RS CV uses shuffle=True, random_state=RNG_SEED (matches original behavior)
-#   No separate top-5 retraining; reuse v2 fits to build gb_fold5_validation.csv
-#   v2 re-fits are parallelized with joblib
+# Gradient Boosting 
 # =====================================
 
 import os, re, string, warnings
@@ -263,7 +249,7 @@ def randomized_for_combo(X_texts, y, X_test_texts, y_test, combo) -> Dict:
     }
 
 # -----------------------------
-# Export winner artifacts (legacy kept)
+# Export winner artifacts 
 # -----------------------------
 def export_winner(out, y, y_test, test_keys):
     best_est  = out["best_est"]; vec = out["vec"]; Xtr = out["Xtr"]
@@ -386,84 +372,6 @@ def append_csv(df: pd.DataFrame, path: str, header_cols: List[str]):
     else:
         df.to_csv(path, index=False)
 
-# -----------------------------
-# Non-crucial info analysis (fold 5 only)
-# -----------------------------
-def _split_sentences(text: str) -> List[str]:
-    sents = re.split(r'(?<=[.!?])\s+', (text or "").strip())
-    return [s for s in sents if s]
-
-def add_non_crucial_analysis(
-    df_full: pd.DataFrame,
-    ngram_range: Tuple[int, int] = (1, 2),
-    topn_sentences: int = 5,
-    max_fake_to_show: int = 5,
-    out_prefix: str = "non_crucial_data_driven",
-    text_column: str = "text"
-) -> pd.DataFrame:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity as _cs
-
-    df = df_full.copy()
-    need_cols = {"fold", "txt_path", text_column}
-    miss = need_cols - set(df.columns)
-    if miss:
-        raise ValueError(f"Non-crucial analysis needs columns: {miss}")
-
-    df["label"] = df["txt_path"].str.lower().map(lambda p: 0 if "deceptive" in p else 1)
-    is_test  = df["fold"].astype(str).str.lower().eq("fold5")
-    is_train = ~is_test
-
-    train_texts = df.loc[is_train, text_column].astype(str).tolist()
-    truthful_train = df.loc[is_train & (df["label"] == 1), text_column].astype(str).tolist()
-    if not train_texts or not truthful_train:
-        df_full["non_crucial"] = np.nan
-        return df_full
-
-    tfidf = TfidfVectorizer(lowercase=True, strip_accents="unicode", stop_words="english",
-                            ngram_range=ngram_range, min_df=1).fit(train_texts)
-
-    centroid = np.asarray(tfidf.transform(truthful_train).mean(axis=0)).ravel()[None, :]
-
-    X_test_only = tfidf.transform(df_full.loc[is_test, text_column].astype(str).tolist())
-    sims_test   = _cs(X_test_only, centroid).ravel()
-    df_full["non_crucial"] = np.nan
-    df_full.loc[is_test, "non_crucial"] = 1.0 - sims_test
-
-    # Summary (fold 5)
-    fake_nc = df_full.loc[is_test & (df_full["label"] == 0), "non_crucial"].to_numpy()
-    real_nc = df_full.loc[is_test & (df_full["label"] == 1), "non_crucial"].to_numpy()
-    pd.DataFrame([
-        {"class": "fake(0)",     "n": len(fake_nc), "mean_non_crucial": float(np.mean(fake_nc)) if len(fake_nc) else np.nan},
-        {"class": "truthful(1)", "n": len(real_nc), "mean_non_crucial": float(np.mean(real_nc)) if len(real_nc) else np.nan},
-    ]).to_csv("non_crucial_fold5_summary.csv", index=False)
-
-    # Top deceptive fold-5 reviews and their least-aligned sentences
-    top_fakes = (
-        df_full.loc[is_test & (df_full["label"] == 0), ["txt_path", text_column, "non_crucial"]]
-          .sort_values("non_crucial", ascending=False)
-          .head(max_fake_to_show)
-    )
-    rows = []
-    for _, row in top_fakes.iterrows():
-        fname = os.path.basename(row["txt_path"])
-        sents = _split_sentences(str(row[text_column]))
-        if not sents:
-            continue
-        Xs = tfidf.transform(sents)
-        nc_scores = 1.0 - _cs(Xs, centroid).ravel()
-        for rank, (score, sent) in enumerate(sorted(zip(nc_scores, sents), key=lambda t: t[0], reverse=True)[:topn_sentences], start=1):
-            rows.append({
-                "txt_path": row["txt_path"], "file": fname,
-                "sentence_rank": rank, "sentence_score": float(score),
-                "sentence": re.sub(r"\s+", " ", sent).strip()
-            })
-    if rows:
-        pd.DataFrame(rows).to_csv("non_crucial_top_sentences_fold5.csv", index=False)
-
-    out_csv = f"{out_prefix}_negative_fold5.csv"
-    df_full.loc[is_test, ["fold", "txt_path", "label", "non_crucial"]].to_csv(out_csv, index=False)
-    return df_full
 
 # -----------------------------
 # Run everything
@@ -552,14 +460,5 @@ if __name__ == "__main__":
     winner = max(outs, key=lambda o: o["mean_cv_acc"])
     export_winner(winner, y_train, y_test, test_keys)
 
-    # 3) Non-crucial information analysis (fold 5 only)
-    _ = add_non_crucial_analysis(df, ngram_range=(1, 2), topn_sentences=5, max_fake_to_show=5, text_column="text")
-
-    print("Done.")
-    print(f"V2 rows written (this run): ~{len(combos_to_run)*TOP_K_V2_PER_COMBO}")
-    print("Outputs: GradientBoosting.xlsx, gb_best_params.csv, gb_fold5_validation.csv, gb_best_validation_params.csv,")
-    print("         gb_best_cv.csv, gb_confusion.csv, gb_predictions_fold5.csv, gradBoost-accuracies.csv,")
-    print("         gradBoost-accuracies-v2.csv, gradBoost-accuracies-v2-params.csv, non_crucial_* CSV files")
-
-
+  
 
