@@ -28,8 +28,8 @@ ii)The function parameter_search can be configured to run based on model_type="d
 iii)The funtion tune_and_evaluate can be manually configured with suitable model_type="dt"/"rf" n_features and ngram_range values in order for an exhaustive grid search to provide the best performing model by fine-tuning/testing a set of hyperparameters for each algorithm.
 
 Output Files:<br>
--Model_Comparisons: cross validation per fold and mean accuracies of different models with different configurations on vectorizer type, #features and n_grams.<br>
--dt-accuracies/rf-accuracies: Cross validation accuracies per fold for the best performing model used for statistical significance testing.<br>
+-Model_Comparisons: cross validation per fold and mean accuracies of different models with different configurations on vectorizer type, #features and n_grams. <br>
+-dt-accuracies/rf-accuracies: Cross validation accuracies per fold for the best performing model used for statistical significance testing. <br>
 -BestModeldt/BestModelrf: hyperparameter set of best performing model after grid search alongside Test Accuracy, Precision, Recall and F1 metric.
  </p>
 
