@@ -441,7 +441,7 @@ if __name__ == "__main__":
     append_csv(v2p_all, "gradBoost-accuracies-v2-params.csv", V2_COLS + EXTRA_INFO_COLS + PARAM_COLS)
     # ===============================================================
 
-    # Rebuild gb_fold5_validation.csv and gb_best_validation_params.csv from v2-params (no extra fits)
+    #Matrix
     fold5_eval_all = (
         v2p_all.sort_values(["vectorizer","ngrams","num_features","rank_by_cv"])
                .groupby(["vectorizer","ngrams","num_features"], as_index=False)
@@ -459,6 +459,52 @@ if __name__ == "__main__":
     # Keep “winner” artifacts as before (winner = best mean CV among combos run)
     winner = max(outs, key=lambda o: o["mean_cv_acc"])
     export_winner(winner, y_train, y_test, test_keys)
+
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Confusion matrices (rows = true labels, cols = predicted labels)
+cm_uni = np.array([[64, 16],
+                   [ 9, 71]])
+cm_bi  = np.array([[61, 19],
+                   [ 6, 74]])
+
+ticks = [0, 1]
+vmax = max(cm_uni.max(), cm_bi.max())
+
+fig, axes = plt.subplots(
+    1, 2, figsize=(10, 3), dpi=200,
+    constrained_layout=True, sharex=True, sharey=True
+)
+
+# Unigram
+sns.heatmap(
+    cm_uni, ax=axes[0], annot=True, fmt='d', cmap='viridis',
+    vmin=0, vmax=vmax, square=True, cbar=True,
+    xticklabels=ticks, yticklabels=ticks, cbar_kws={'shrink': 0.8}
+)
+axes[0].set_title('Confusion Matrix - n_gram=1', pad=6)
+axes[0].set_xlabel('Predicted label', labelpad=6)
+axes[0].set_ylabel('True label', labelpad=6)
+axes[0].tick_params(axis='x', rotation=0)
+
+# Bigram
+sns.heatmap(
+    cm_bi, ax=axes[1], annot=True, fmt='d', cmap='viridis',
+    vmin=0, vmax=vmax, square=True, cbar=True,
+    xticklabels=ticks, yticklabels=ticks, cbar_kws={'shrink': 0.8}
+)
+axes[1].set_title('Confusion Matrix - n_gram=2', pad=6)
+axes[1].set_xlabel('Predicted label', labelpad=6)
+axes[1].set_ylabel('True label', labelpad=6)
+
+# Put the right subplot's y label and ticks on the right to avoid overlap
+axes[1].yaxis.set_label_position("right")
+axes[1].yaxis.tick_right()
+axes[1].tick_params(axis='x', rotation=0)
+
+plt.show()
 
   
 
