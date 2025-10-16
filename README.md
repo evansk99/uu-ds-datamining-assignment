@@ -33,3 +33,9 @@ Gradient Boosting is executed through run_gradBoost.py. The script reads dataset
 i) Choose the text setup via VECTORIZERS=['count','tfidf'], NGRAMS=[(1,1),(1,2)], FEATURE_SIZES=[500,1000], and MIN_DF=0.02.
  ii) randomized_for_combo runs RandomizedSearchCV on GradientBoostingClassifier with five-fold stratified CV, shuffling, accuracy scoring, and random_state=42, drawing 60 configurations that vary: number of trees, learning rate, max depth, subsample, min samples per leaf, min samples to split, and max features.
  iii) The best setting by mean CV accuracy is refit on folds 1–4 and tested on fold 5, exporting test accuracy, precision, recall, F1, the confusion matrix, and per-document predictions.
+ 
+#Output files used
+- gb_best_validation_params.csv — single best configuration, selected by highest fold-5 accuracy.
+- gb_best_cv.csv — cross-validation split scores for the selected model, plus mean and standard deviation.
+- gradBoost-accuracies-v2-params.csv — extended table with fold-5 test accuracy, CV summary, full Gradient Boosting hyperparameters, and vectorizer settings.
+- Matrix is shown within the Juypiternotebook
