@@ -93,7 +93,8 @@ def vectorize(df: pd.DataFrame, with_bigrams=False, max_features=150):
     vectors = vectorizer.fit_transform(df.text_processed)
     dtm = vectors.toarray()
     feature_names = vectorizer.get_feature_names_out()
-    return dtm, feature_names
+    dtm_df = pd.DataFrame(dtm, index=df.index, columns=feature_names)
+    return dtm, dtm_df
 
 def gridSearch(pipeline, params, X, y, k=5):
     gs = GridSearchCV(pipeline, param_grid=params, cv=StratifiedKFold(k, shuffle=True, random_state=42), scoring='f1', verbose=1)
@@ -125,6 +126,8 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     cv_results = cross_validate(classifier, X_train, y_train, cv=k_folds, 
                                 scoring=scoring, return_train_score=True)
     classifier = classifier.fit(X_train, y_train)
+    top5_truthful_terms_idx =  np.argpartition(classifier.steps[0][1].coef_[0], -5)[-5:]
+    top5_deceptive_terms_idx = np.argpartition(classifier.steps[0][1].coef_[0], 5)[:5]
     preds = classifier.predict(X_test)
     acc = classifier.score(X_test, y_test)
     avgs = {}
@@ -158,6 +161,7 @@ def LogRegCV(X_train: np.array, y_train: np.array,
     filename = f'plots/cm-logRegr-with_bigrams-{exec_ts}.png' if  with_bigrams else f'plots/cm-logRegr-{exec_ts}.png'
     disp.plot().figure_.savefig(filename)
     matplotlib.pyplot.close() 
+    return top5_deceptive_terms_idx, top5_truthful_terms_idx
 
 
 def MultinomialNaiveBayes(X_train: np.array, y_train: np.array,

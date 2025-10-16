@@ -96,8 +96,8 @@ def main():
     for k in [5,10]:
         for maxF in [150,200,250,300,350,400,450,500,550]:
             use_lexical_features = True
-            dtm_unigrams, feature_names_unigrams = vectorize(df, max_features=maxF)
-            dtm_bigrams, feature_names_bigrams = vectorize(df, with_bigrams=True, max_features=maxF)
+            dtm_unigrams, dtm_unigrams_df = vectorize(df, max_features=maxF)
+            dtm_bigrams, dtm_bigrams_df = vectorize(df, with_bigrams=True, max_features=maxF)
             if use_lexical_features:
                 dtm_unigrams_logReg = np.hstack((dtm_unigrams, lexical_features_logReg))
                 dtm_bigrams_logReg = np.hstack((dtm_bigrams, lexical_features_logReg))
@@ -115,12 +115,24 @@ def main():
             y_train, y_test = labels[train_indexes], labels[test_indexes]
     
             # Run Logistic Regression CV
-            LogRegCV(**unigrams_ds_logReg,
+            U_top5_deceptive_idx, U_top5_truthful_idx = LogRegCV(**unigrams_ds_logReg,
                     y_train=y_train , y_test=y_test,
                     k_folds=k, test_fold=test_fold)
-            LogRegCV(**bigrams_ds_logReg,
+            if maxF == 300:
+                print("Unigrams - Most discriminative terms pointing to deceptive review:")
+                print(dtm_unigrams_df.columns[U_top5_deceptive_idx])
+                print("Unigrams - Most truthful terms pointing to truthful review:")
+                print(dtm_unigrams_df.columns[U_top5_truthful_idx])
+                
+            B_top5_deceptive_idx, B_top5_truthful_idx = LogRegCV(**bigrams_ds_logReg,
                     y_train=y_train , y_test=y_test, with_bigrams=True,
                     k_folds=k, test_fold=test_fold)
+            if maxF == 250:
+                print("Bigrams - Most discriminative terms pointing to deceptive review:")
+                print(dtm_bigrams_df.columns[B_top5_deceptive_idx])
+                print("Bigrams - Most truthful terms pointing to truthful review:")
+                print(dtm_bigrams_df.columns[B_top5_truthful_idx])
+            
             
             # Run Multinomial NB
             unigrams_alpha_values = compute_alpha_values(X_bow=dtm_unigrams, lexical_X=lexical_features_multiNB, y=labels)
