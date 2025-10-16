@@ -1,7 +1,8 @@
 # uu-ds-datamining-assignment
 
 ## Install Dependencies
-`$ pip install -r requirements.txt`
+Assuming you have pre installed a python3.7 or newer version.
+`$ pip install -r requirements.txt # to install the required packages`
 
 ## Implementation of Logistic Regression and Naive Bayes
  <p>
@@ -10,6 +11,13 @@
  <p>
     Logistic Regression is executed in the same file the same way, with the addition of grid search cv to find the best configuration for `C` and `solver`
  </p>
+
+### Execution
+```
+$ python run_MultiNB_logReg.py
+```
+This script runs all the possible model configurations for splits, maximum number of features and n-range for document terms for MNB and Logisting Regression. It exports the best performances (csv) and the confusion matrices (png) for the test set for each model inside a folder called plots`
+   
 
 ## Implementation of Classification Tree and Random Forest
 <p>
