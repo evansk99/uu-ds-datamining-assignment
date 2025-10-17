@@ -1,5 +1,12 @@
 # uu-ds-datamining-assignment
 
+## Acknowledgements
+This project was completed in collaboration with:
+- Radis Toubalidis (Github:radistoubalidis) - Preprocessing, Naive Bayes, Logistic and Regression implementation.
+- Thijme Bouwmeester (Github: thijmebouwmeester-source) - Gradient Boosting implementation.
+- Evan Skoulas (Me) – Decision trees,  Random Forests implementation and experimental process design.
+
+
 ## Install Dependencies
 Assuming you have pre installed a python3.7 or newer version.
 `$ pip install -r requirements.txt # to install the required packages`
